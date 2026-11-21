@@ -23,6 +23,7 @@ canvas{display:block}
 .modes button.on{border-color:#9fd8ff;color:#001018;background:#9fd8ff}
 #meter{flex:1;height:8px;border-radius:4px;background:#12202c;overflow:hidden}
 #meterFill{height:100%;width:0;background:#9fd8ff}
+.step{width:32px;height:28px;border-radius:14px;border:1px solid #35607f;background:transparent;color:#9fd8ff;font-size:16px;line-height:1;padding:0}
 .voiceOnly,.simOnly{display:none}
 body.voice .voiceOnly{display:flex}
 body.sim .simOnly{display:flex}
@@ -39,6 +40,8 @@ body.sim .simOnly{display:flex}
   <div class="rows">
     <div class="row"><span class="lab">Source</span><div class="modes"><button id="mVoice">Voice</button><button id="mSim">Simulated pulse</button></div></div>
     <div class="row"><span class="lab">Sound</span><div class="modes"><button id="sOn">On</button><button id="sOff">Off</button></div></div>
+    <div class="row"><label for="hz">Tone</label><button class="step" id="hzDn">&minus;</button><input id="hz" type="range" min="40" max="1000" step="1" value="432"><button class="step" id="hzUp">+</button><span class="val" id="hzV"></span></div>
+    <div class="row"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="35"><span class="val" id="tvolV"></span></div>
     <div class="row voiceOnly"><span class="lab">Voice echo</span><div class="modes"><button id="eOn">On (headphones)</button><button id="eOff">Off</button></div></div>
     <div class="row voiceOnly"><span class="lab">Voice level</span><div id="meter"><div id="meterFill"></div></div><span class="val" id="lvlV"></span></div>
     <div class="row voiceOnly"><label for="sens">Sensitivity</label><input id="sens" type="range" min="1" max="10" step="1" value="6"><span class="val" id="sensV"></span></div>
@@ -58,7 +61,7 @@ import * as THREE from 'three';
 const N = 50;            // nodes per axis in one repeating block, 1 m apart
 const PITCH = 1.0;
 const SLOTS = 40;        // max simultaneous wave rings
-const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, sound: true, echo: false };
+const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, sound: true, echo: false, toneHz: 432, toneVol: 35 };
 
 // ---- Lattice ----
 const HALF = (N - 1) * PITCH / 2;
@@ -391,14 +394,18 @@ function startAudio() {
 
   // drone: 432 Hz with its lower octaves (216 and 108 Hz), beating slowly against near-twins
   const drone = ctx.createGain();
-  drone.gain.value = 0.10;
-  [[108.0, 0.5], [108.3, 0.45], [216.0, 0.32], [216.45, 0.22], [432.0, 0.12], [432.6, 0.07]].forEach(([f, g]) => {
-    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+  droneGain = drone;
+  drone.gain.value = cfg.toneVol / 100 * 0.3;
+  // the chosen tone, plus one and two octaves below it; each has a near-twin so they beat slowly
+  TONE_PARTS.forEach(([mult, g]) => {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = cfg.toneHz * mult;
     const og = ctx.createGain(); og.gain.value = g;
     o.connect(og); og.connect(drone); o.start();
+    toneOscs.push([o, mult]);
   });
   const swell = ctx.createOscillator(); swell.frequency.value = 0.045;
-  const swellAmt = ctx.createGain(); swellAmt.gain.value = 0.04;
+  const swellAmt = ctx.createGain(); swellAmt.gain.value = drone.gain.value * 0.4;
+  swellGain = swellAmt;
   swell.connect(swellAmt); swellAmt.connect(drone.gain); swell.start();
   drone.connect(master);
   const droneSend = ctx.createGain(); droneSend.gain.value = 0.25;
@@ -414,6 +421,17 @@ function startAudio() {
   const airLA = ctx.createGain(); airLA.gain.value = 0.008;
   airL.connect(airLA); airLA.connect(airG.gain); airL.start();
   air.connect(bp); bp.connect(airG); airG.connect(master); air.start();
+}
+const TONE_PARTS = [[0.25, 0.5], [0.25 * 1.0028, 0.45], [0.5, 0.32], [0.5 * 1.0021, 0.22], [1, 0.12], [1.0014, 0.07]];
+const toneOscs = [];
+let droneGain = null, swellGain = null;
+function applyTone() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  toneOscs.forEach(([o, mult]) => o.frequency.setTargetAtTime(cfg.toneHz * mult, now, 0.08));
+  const g = cfg.toneVol / 100 * 0.3;
+  droneGain.gain.setTargetAtTime(g, now, 0.1);
+  swellGain.gain.setTargetAtTime(g * 0.4, now, 0.1);
 }
 function setEcho(on) {
   cfg.echo = on;
@@ -529,8 +547,16 @@ function readControls() {
   $('spdV').textContent = cfg.speed.toFixed(1) + ' m/s';
   $('sensV').textContent = cfg.sens + ' / 10';
   $('driftV').textContent = cfg.drift.toFixed(1) + ' m/s';
+  cfg.toneHz = Number($('hz').value);
+  cfg.toneVol = Number($('tvol').value);
+  $('hzV').textContent = cfg.toneHz + ' Hz';
+  $('tvolV').textContent = cfg.toneVol + '%';
+  applyTone();
 }
-['bpm', 'spd', 'sens', 'drift'].forEach(id => $(id).addEventListener('input', readControls));
+function nudgeHz(by) { const el = $('hz'); el.value = Math.max(40, Math.min(1000, Number(el.value) + by)); readControls(); showPanel(); }
+$('hzDn').addEventListener('click', () => nudgeHz(-1));
+$('hzUp').addEventListener('click', () => nudgeHz(1));
+['bpm', 'spd', 'sens', 'drift', 'hz', 'tvol'].forEach(id => $(id).addEventListener('input', readControls));
 readControls();
 setSound(true);
 setEcho(false);

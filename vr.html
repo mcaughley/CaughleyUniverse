@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Pulse Lattice VR</title>
+<title>Pulse Lattice</title>
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif;color:#9fd8ff;touch-action:none;-webkit-user-select:none;user-select:none}
 canvas{display:block}
@@ -13,54 +13,86 @@ canvas{display:block}
 #start p,#warn p{margin:0;max-width:420px;font-size:14px;line-height:1.5;color:#6f9fc4}
 .big{font-size:17px;padding:14px 34px;border-radius:30px;border:1px solid #9fd8ff;background:transparent;color:#9fd8ff}
 #enterVR{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:5;display:none;background:#9fd8ff;color:#001018}
-#panel{position:fixed;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(0,0,0,.55);font-size:13px;display:none}
+#cue{position:fixed;top:18%;left:0;right:0;text-align:center;font-size:22px;font-weight:200;letter-spacing:.15em;color:#cfe9ff;pointer-events:none;text-shadow:0 0 12px #000;display:none}
+#panel{position:fixed;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;max-height:72vh;overflow-y:auto;touch-action:pan-y;padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(0,4,12,.78);font-size:13px;display:none;transition:opacity .8s}
+#panel.away{opacity:0;pointer-events:none}
+.sec{display:none;margin-top:8px}
+.sec.open{display:block}
 .row{display:flex;align-items:center;gap:10px;margin:6px 0}
-.row label,.row .lab{width:96px;text-align:left}
-.row input[type=range]{flex:1}
-.row span.val{width:64px;text-align:right}
-#status{color:#6f9fc4;font-size:12px;margin-top:4px;line-height:1.4}
-.modes{display:flex;flex:1;gap:8px}
-.modes button{flex:1;padding:8px 0;border-radius:18px;border:1px solid #35607f;background:transparent;color:#6f9fc4;font-size:13px}
+.row label,.row .lab{width:96px;text-align:left;flex:none}
+.row input[type=range]{flex:1;min-width:0}
+.row span.val{width:64px;text-align:right;flex:none}
+#status{color:#6f9fc4;font-size:12px;margin-top:6px;line-height:1.4}
+.modes{display:flex;flex:1;gap:8px;flex-wrap:wrap}
+.modes button{flex:1;padding:8px 6px;border-radius:18px;border:1px solid #35607f;background:transparent;color:#6f9fc4;font-size:13px;white-space:nowrap}
 .modes button.on{border-color:#9fd8ff;color:#001018;background:#9fd8ff}
+#tabs button{padding:10px 6px;font-size:14px}
+#sets button{flex:1 1 30%}
 #meter{flex:1;height:8px;border-radius:4px;background:#12202c;overflow:hidden}
 #meterFill{height:100%;width:0;background:#9fd8ff}
-.step{width:32px;height:28px;border-radius:14px;border:1px solid #35607f;background:transparent;color:#9fd8ff;font-size:16px;line-height:1;padding:0}
-.voiceOnly,.simOnly{display:none}
+.step{width:32px;height:28px;border-radius:14px;border:1px solid #35607f;background:transparent;color:#9fd8ff;font-size:16px;line-height:1;padding:0;flex:none}
+.voiceOnly,.simOnly,.opt{display:none}
 body.voice .voiceOnly{display:flex}
 body.sim .simOnly{display:flex}
+.note{color:#6f9fc4;font-size:12px;line-height:1.4;margin:4px 0}
 </style>
 </head>
 <body class="sim">
 <div id="start">
-  <h1>PULSE LATTICE VR</h1>
-  <p>A lattice of lights that never ends, dark until your voice wakes it. Choose your headset, then Start. Set things up on the next screen, then press Enter VR.</p>
-  <div class="modes" style="max-width:420px;width:100%">
+  <h1>PULSE LATTICE</h1>
+  <p id="intro">A lattice of lights that never ends, dark until your voice wakes it. Turn and tilt your phone to look around. You drift the way you face: touch and hold to travel faster.</p>
+  <div class="modes" id="hsRow" style="max-width:420px;width:100%;display:none">
     <button data-hs="q2">Quest 2</button><button data-hs="q3" class="on">Quest 3 / 3S</button><button data-hs="qpro">Quest Pro</button><button data-hs="max">Other / PC</button>
   </div>
-  <p>Allow the microphone when asked: your voice is only used live on this device. Nothing is recorded or sent.</p>
-  <button id="go" class="big">Start</button>
+  <p>Headphones make it feel much bigger. Allow the microphone when asked: your voice is only used live on this device. Nothing is recorded or sent.</p>
+  <button id="go" class="big">Enter</button>
 </div>
 <div id="warn">
   <h1>40+40</h1>
   <p>This pulses the lights and the tone 40 times a second. In a headset the flashing fills your whole view.</p>
-  <p>Do not use it if you have epilepsy or are sensitive to flashing light. Stop if you feel unwell.</p>
+  <p>Do not use it if you, or anyone who can see the screen, has epilepsy or is sensitive to flashing light. Stop if you feel unwell.</p>
   <p>It is an art effect. It is not a medical device or a treatment.</p>
-  <div class="modes" style="max-width:300px;width:100%"><button id="warnNo">Cancel</button><button id="warnYes" class="on">Start</button></div>
+  <div class="modes" style="max-width:300px;width:100%;flex:none"><button id="warnNo">Cancel</button><button id="warnYes" class="on">Start</button></div>
 </div>
 <button id="enterVR" class="big">Enter VR</button>
+<div id="cue"></div>
 <div id="panel">
-  <div class="row"><span class="lab">Source</span><div class="modes"><button id="mVoice">Voice</button><button id="mSim">Simulated pulse</button></div></div>
-  <div class="row"><span class="lab">Sound</span><div class="modes"><button id="sOn">On</button><button id="sOff">Off</button></div></div>
-  <div class="row"><span class="lab">40+40</span><div class="modes"><button id="fOn">On</button><button id="fOff">Off</button></div></div>
-  <div class="row"><span class="lab">40 Hz sound</span><div class="modes"><button id="shOn">Sharp</button><button id="shOff">Smooth</button></div></div>
-  <div class="row"><label for="hz">Tone</label><button class="step" id="hzDn">&minus;</button><input id="hz" type="range" min="40" max="1000" step="1" value="432"><button class="step" id="hzUp">+</button><span class="val" id="hzV"></span></div>
-  <div class="row"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="35"><span class="val" id="tvolV"></span></div>
-  <div class="row voiceOnly"><span class="lab">Voice echo</span><div class="modes"><button id="eOn">On (headphones)</button><button id="eOff">Off</button></div></div>
-  <div class="row voiceOnly"><span class="lab">Voice level</span><div id="meter"><div id="meterFill"></div></div><span class="val" id="lvlV"></span></div>
-  <div class="row voiceOnly"><label for="sens">Sensitivity</label><input id="sens" type="range" min="1" max="10" step="1" value="6"><span class="val" id="sensV"></span></div>
-  <div class="row simOnly"><label for="bpm">Pulse</label><input id="bpm" type="range" min="30" max="140" step="1" value="60"><span class="val" id="bpmV"></span></div>
-  <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="1"><span class="val" id="driftV"></span></div>
-  <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="30" step="0.5" value="6"><span class="val" id="spdV"></span></div>
+  <div class="modes" id="tabs"><button data-tab="av">AudioVisual</button><button data-tab="ar">Array</button><button data-tab="sets">Sets</button></div>
+
+  <div class="sec" id="sec-av">
+    <div class="row"><span class="lab">Source</span><div class="modes"><button id="mVoice">Voice</button><button id="mSim">Simulated pulse</button></div></div>
+    <div class="row"><span class="lab">Sound</span><div class="modes"><button id="sOn">On</button><button id="sOff">Off</button></div></div>
+    <div class="row"><label for="hz">Tone</label><button class="step" id="hzDn">&minus;</button><input id="hz" type="range" min="40" max="1000" step="1" value="432"><button class="step" id="hzUp">+</button><span class="val" id="hzV"></span></div>
+    <div class="row"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="35"><span class="val" id="tvolV"></span></div>
+    <div class="row"><span class="lab">Water</span><div class="modes"><button data-water="off">Off</button><button data-water="stream">Stream</button><button data-water="rain">Rain</button></div></div>
+    <div class="row"><label for="wvol">Water volume</label><input id="wvol" type="range" min="0" max="100" step="1" value="50"><span class="val" id="wvolV"></span></div>
+    <div class="row voiceOnly"><span class="lab">Voice echo</span><div class="modes"><button id="eOn">On (headphones)</button><button id="eOff">Off</button></div></div>
+    <div class="row voiceOnly"><span class="lab">Voice level</span><div id="meter"><div id="meterFill"></div></div><span class="val" id="lvlV"></span></div>
+    <div class="row voiceOnly"><label for="sens">Sensitivity</label><input id="sens" type="range" min="1" max="10" step="1" value="6"><span class="val" id="sensV"></span></div>
+    <div class="row simOnly"><label for="bpm">Pulse</label><input id="bpm" type="range" min="30" max="140" step="1" value="60"><span class="val" id="bpmV"></span></div>
+  </div>
+
+  <div class="sec" id="sec-ar">
+    <div class="row"><span class="lab">Lights</span><div class="modes"><button data-lights="always">Always on</button><button data-lights="sound">Sound activated</button></div></div>
+    <div class="row"><label for="pitch">Spacing</label><input id="pitch" type="range" min="0.2" max="1.5" step="0.05" value="0.5"><span class="val" id="pitchV"></span></div>
+    <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="1"><span class="val" id="driftV"></span></div>
+    <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="30" step="0.5" value="6"><span class="val" id="spdV"></span></div>
+  </div>
+
+  <div class="sec" id="sec-sets">
+    <div class="modes" id="sets">
+      <button data-set="none">None</button><button data-set="breath">Slow breath</button><button data-set="hum">Humming</button>
+      <button data-set="water">Water</button><button data-set="bin">Binaural</button><button data-set="forty">40+40</button>
+    </div>
+    <div class="row opt opt-breath"><span class="lab">Pattern</span><div class="modes"><button data-pat="coh">5 - 5</button><button data-pat="box">Box</button><button data-pat="478">4 - 7 - 8</button></div></div>
+    <div class="note opt opt-breath">Follow the colours: blue is breathe in, gold is hold, violet is breathe out.</div>
+    <div class="row opt opt-hum"><label for="goal">Hum goal</label><input id="goal" type="range" min="3" max="30" step="1" value="8"><span class="val" id="goalV"></span></div>
+    <div class="note opt opt-hum">Breathe in, then hum as you breathe out. Hold one hum for the goal time and the lights turn fuchsia.</div>
+    <div class="note opt opt-water">Running water with the lights on. Water is also in AudioVisual, to use with anything else.</div>
+    <div class="row opt opt-bin"><span class="lab">Beat</span><div class="modes"><button data-beat="6">Theta 6 Hz</button><button data-beat="10">Alpha 10 Hz</button></div></div>
+    <div class="note opt opt-bin">Headphones only: each ear gets a slightly different tone.</div>
+    <div class="row opt opt-forty"><span class="lab">40 Hz sound</span><div class="modes"><button id="shOn">Sharp</button><button id="shOff">Smooth</button></div></div>
+  </div>
   <div id="status"></div>
 </div>
 <script type="importmap">
@@ -70,18 +102,22 @@ body.sim .simOnly{display:flex}
 import * as THREE from 'three';
 
 // ---- Settings ----
-// Lights per side of the repeating block, and how many waves can be alive at once, per headset.
+// Lights per side of the repeating block, and how many waves can be alive at once.
 const HEADSETS = {
   q2:   { n: 32, slots: 24, label: 'Quest 2' },
   q3:   { n: 40, slots: 32, label: 'Quest 3 / 3S' },
   qpro: { n: 36, slots: 28, label: 'Quest Pro' },
-  max:  { n: 50, slots: 40, label: 'Other / PC' }
+  max:  { n: 50, slots: 40, label: 'Full' }
 };
 let headset = 'q3';
-const PITCH = 1.0;
-const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0,
-              sound: true, echo: false, toneHz: 432, toneVol: 35, forty: false, fortySharp: true };
+const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, pitch: 0.5,
+              sound: true, echo: false, toneHz: 432, toneVol: 35, water: 'off', waterVol: 50,
+              lights: 'sound', set: 'none', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
+// Breathing patterns, in seconds: in, hold, out, hold
+const PATTERNS = { coh: [5, 0, 5, 0], box: [4, 4, 4, 4], '478': [4, 7, 8, 0] };
+const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.65, 0.48, 1.00], COL_FUCHSIA = [1.00, 0.08, 0.78];
 const $ = id => document.getElementById(id);
+const all = sel => Array.from(document.querySelectorAll(sel));
 
 // ---- Renderer and scene ----
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -103,7 +139,7 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-// ---- Deep background, drawn once into a surrounding texture (cheap for a headset) ----
+// ---- Deep background, drawn once into a surrounding texture ----
 {
   const skyMat = new THREE.ShaderMaterial({
     vertexShader: `
@@ -181,23 +217,24 @@ const starMat = new THREE.ShaderMaterial({
   world.add(stars);
 }
 
-// ---- Lattice (built when you press Start, sized for the headset you chose) ----
-let N = 40, SLOTS = 32, SIZE = 40;
+// ---- Lattice (built when you press Enter) ----
+let N = 50, SLOTS = 40, SIZE = 50;
 let material = null, pulseTimes, pulseAmps, pulseWorld, pulseRel, pulseDir;
-const cam = { x: 0, y: 0, z: 0 };                 // how far you have travelled through the lattice
-const head = new THREE.Vector3();                  // where your head really is in the room
+const cam = { x: 0, y: 0, z: 0 };                 // how far you have travelled through the lattice, in metres
+const head = new THREE.Vector3();                  // where your head really is in the room (VR)
 const camUniform = new THREE.Vector3();
+const setCol = new THREE.Vector3(1, 1, 1);
 const hands = [new THREE.Vector3(0, -99, 0), new THREE.Vector3(0, -99, 0)];   // relative to your head
 let slot = 0;
 const wrap = v => ((v % SIZE) + SIZE) % SIZE;
 
 function buildLattice() {
-  N = HEADSETS[headset].n; SLOTS = HEADSETS[headset].slots; SIZE = N * PITCH;
-  const HALF = (N - 1) * PITCH / 2, count = N * N * N;
-  const positions = new Float32Array(count * 3);
+  N = HEADSETS[headset].n; SLOTS = HEADSETS[headset].slots; SIZE = N;
+  const HALF = (N - 1) / 2, count = N * N * N;
+  const positions = new Float32Array(count * 3);   // in lattice steps; the Spacing setting turns steps into metres
   let p = 0;
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) for (let k = 0; k < N; k++) {
-    positions[p++] = i * PITCH - HALF; positions[p++] = j * PITCH - HALF; positions[p++] = k * PITCH - HALF;
+    positions[p++] = i - HALF; positions[p++] = j - HALF; positions[p++] = k - HALF;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -210,9 +247,10 @@ function buildLattice() {
     uniforms: {
       uTime: { value: 0 }, uPulseT: { value: pulseTimes }, uPulseA: { value: pulseAmps },
       uPulseO: { value: pulseRel }, uPulseD: { value: pulseDir }, uCam: { value: camUniform },
-      uHand: { value: hands }, uHalf: { value: SIZE / 2 },
+      uHand: { value: hands }, uHalf: { value: SIZE / 2 }, uPitch: { value: cfg.pitch },
       uSpeed: { value: cfg.speed }, uWidth: { value: cfg.width }, uEmber: { value: cfg.ember },
-      uLevel: { value: 0 }, uRest: { value: 0 }, uFlick: { value: 1 }, uPx: { value: 20 }
+      uLevel: { value: 0 }, uRest: { value: 0 }, uFlick: { value: 1 }, uPx: { value: 20 },
+      uSetCol: { value: setCol }, uSetMix: { value: 0 }
     },
     vertexShader: `
       uniform float uTime;
@@ -223,6 +261,7 @@ function buildLattice() {
       uniform vec3 uCam;
       uniform vec3 uHand[2];
       uniform float uHalf;
+      uniform float uPitch;
       uniform float uSpeed;
       uniform float uWidth;
       uniform float uEmber;
@@ -236,7 +275,7 @@ function buildLattice() {
       varying vec3 vTint;
       void main() {
         // the lattice wraps around you, so there is always more of it in every direction
-        vec3 rel = mod(position - uCam + uHalf, 2.0 * uHalf) - uHalf;
+        vec3 rel = (mod(position - uCam + uHalf, 2.0 * uHalf) - uHalf) * uPitch;   // uPitch: metres between lights
         float d = length(rel);
         float g = 0.0;
         for (int i = 0; i < ${SLOTS}; i++) {
@@ -261,10 +300,10 @@ function buildLattice() {
         g += 0.3 * uLevel * exp(-d / 5.0);
         // lights near your hands glow softly, so you can find one to touch
         vec3 h0 = rel - uHand[0], h1 = rel - uHand[1];
-        g += 0.5 * (exp(-dot(h0, h0) / 0.45) + exp(-dot(h1, h1) / 0.45));
+        g += 0.5 * (exp(-dot(h0, h0) / (0.45 * uPitch * uPitch)) + exp(-dot(h1, h1) / (0.45 * uPitch * uPitch)));
         g = (g + uRest) * uFlick;
         vGlow = clamp(g, 0.0, 1.4);
-        vAtt = (1.0 - smoothstep(uHalf * 0.6, uHalf * 0.98, d)) / (1.0 + d * d / 260.0);
+        vAtt = (1.0 - smoothstep(uHalf * 0.6 * uPitch, uHalf * 0.98 * uPitch, d)) / (1.0 + d * d / 260.0);
         float h = fract(sin(dot(position, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
         vTint = mix(vec3(0.72, 0.85, 1.0), vec3(1.0, 0.92, 0.80), h * h * h);
         vec4 mv = modelViewMatrix * vec4(rel, 1.0);
@@ -274,6 +313,8 @@ function buildLattice() {
       }
     `,
     fragmentShader: `
+      uniform vec3 uSetCol;
+      uniform float uSetMix;
       varying float vGlow;
       varying float vAtt;
       varying float vSize;
@@ -289,6 +330,8 @@ function buildLattice() {
                         exp(-abs(c.y) * 70.0) * exp(-abs(c.x) * 7.0)) * 0.6 * smoothstep(0.55, 1.2, vGlow);
         float a = (core + halo + spikes) * vAtt * min(vGlow, 1.0);
         vec3 col = mix(vTint, vec3(1.0), clamp(core + vGlow - 0.6, 0.0, 1.0));
+        // a Set can colour the lights (breathing phases, the humming goal); the very centre stays a little white
+        col = mix(col, mix(uSetCol, vec3(1.0), 0.3 * core), uSetMix);
         gl_FragColor = vec4(col, a);
       }
     `,
@@ -317,7 +360,8 @@ let audioCtx = null, master = null, micIn = null, echoGate = null, analyser = nu
 let micError = '';
 const TONE_PARTS = [[1, 0.6], [0.5, 0.25], [0.25, 0.08]];   // the chosen pitch, with a little of the octaves below
 const toneOscs = [];
-let droneGain = null, swellGain = null, pulser = null, pulseDepth = null, smoothDepth = null;
+let droneGain = null, swellGain = null, breathG = null, pulser = null, pulseDepth = null, smoothDepth = null;
+let binL = null, binR = null, binBus = null, streamBus = null, rainBus = null;
 function startAudio() {
   if (audioCtx) return;
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -328,6 +372,7 @@ function startAudio() {
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = -3; limiter.knee.value = 3; limiter.ratio.value = 12; limiter.attack.value = 0.005; limiter.release.value = 0.3;
   master.connect(limiter); limiter.connect(ctx.destination);
+  window.__audio = { ctx, limiter };
 
   // a huge-room echo, generated here (no audio files); used by the touch chime and the optional voice echo
   const len = Math.floor(sr * 6), ir = ctx.createBuffer(2, len, sr);
@@ -351,6 +396,7 @@ function startAudio() {
   echoGate = ctx.createGain(); echoGate.gain.value = 0;
   micIn.connect(hp); hp.connect(pre); pre.connect(echoGate); echoGate.connect(verb);
 
+  // the tone
   const drone = ctx.createGain();
   droneGain = drone;
   drone.gain.value = cfg.toneVol / 100 * 0.55;
@@ -364,6 +410,7 @@ function startAudio() {
   const swellAmt = ctx.createGain(); swellAmt.gain.value = drone.gain.value * 0.2;
   swellGain = swellAmt;
   swell.connect(swellAmt); swellAmt.connect(drone.gain); swell.start();
+  breathG = ctx.createGain(); breathG.gain.value = 1;       // Slow breath swells the tone with the lights
 
   // 40+40 sound. Sharp: a 5 ms burst of the tone every 25 ms. Smooth: the tone swells 40 times a second.
   pulser = ctx.createGain(); pulser.gain.value = 1;
@@ -378,15 +425,75 @@ function startAudio() {
   const sine40 = ctx.createOscillator(); sine40.type = 'sine'; sine40.frequency.value = 40;
   smoothDepth = ctx.createGain(); smoothDepth.gain.value = 0;
   sine40.connect(smoothDepth); smoothDepth.connect(pulser.gain); sine40.start();
-  drone.connect(pulser); pulser.connect(master);
+  drone.connect(breathG); breathG.connect(pulser); pulser.connect(master);
+
+  // Binaural: the tone in the left ear, the tone plus a few Hz in the right ear
+  binBus = ctx.createGain(); binBus.gain.value = 0; binBus.connect(master);
+  const mkEar = (pan) => {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = cfg.toneHz;
+    const p = ctx.createStereoPanner(); p.pan.value = pan;
+    o.connect(p); p.connect(binBus); o.start();
+    return o;
+  };
+  binL = mkEar(-1); binR = mkEar(1);
+
+  // Water, made from shaped noise (no audio files)
+  const nb = ctx.createBuffer(1, sr * 5, sr), nd = nb.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource(); noise.buffer = nb; noise.loop = true; noise.start();
+  const lfo = (hz, depth, target) => {
+    const o = ctx.createOscillator(); o.frequency.value = hz;
+    const g = ctx.createGain(); g.gain.value = depth;
+    o.connect(g); g.connect(target); o.start();
+  };
+  const band = (type, f, q, gain, out) => {
+    const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q;
+    const g = ctx.createGain(); g.gain.value = gain;
+    noise.connect(b); b.connect(g); g.connect(out);
+    return [b, g];
+  };
+  // stream: a soft rush, with higher bands that wander and flutter like water over stones
+  streamBus = ctx.createGain(); streamBus.gain.value = 0; streamBus.connect(master);
+  band('lowpass', 260, 0.5, 0.5, streamBus);
+  band('bandpass', 700, 0.8, 0.45, streamBus);
+  let [b1, g1] = band('bandpass', 1600, 1.4, 0.4, streamBus);
+  lfo(0.23, 500, b1.frequency); lfo(1.7, 0.14, g1.gain); lfo(0.61, 0.1, g1.gain);
+  let [b2, g2] = band('bandpass', 2700, 2.2, 0.3, streamBus);
+  lfo(0.37, 800, b2.frequency); lfo(2.9, 0.13, g2.gain); lfo(0.83, 0.08, g2.gain);
+  let [b3, g3] = band('bandpass', 4200, 3.0, 0.16, streamBus);
+  lfo(0.51, 900, b3.frequency); lfo(4.3, 0.07, g3.gain);
+  // rain: a steady hiss with a soft low rumble
+  rainBus = ctx.createGain(); rainBus.gain.value = 0; rainBus.connect(master);
+  band('highpass', 1800, 0.4, 0.3, rainBus);
+  band('bandpass', 5200, 0.7, 0.25, rainBus);
+  let [, g4] = band('lowpass', 320, 0.5, 0.35, rainBus);
+  lfo(0.09, 0.08, g4.gain);
 }
 function applyTone() {
   if (!audioCtx) return;
-  const now = audioCtx.currentTime;
+  const now = audioCtx.currentTime, bin = cfg.set === 'bin';
   toneOscs.forEach(([o, mult]) => o.frequency.setTargetAtTime(cfg.toneHz * mult, now, 0.08));
   const g = cfg.toneVol / 100 * 0.55;
-  droneGain.gain.setTargetAtTime(g, now, 0.1);
-  swellGain.gain.setTargetAtTime(g * 0.2, now, 0.1);
+  droneGain.gain.setTargetAtTime(bin ? 0 : g, now, 0.1);
+  swellGain.gain.setTargetAtTime(bin ? 0 : g * 0.2, now, 0.1);
+  binL.frequency.setTargetAtTime(cfg.toneHz, now, 0.08);
+  binR.frequency.setTargetAtTime(cfg.toneHz + cfg.beat, now, 0.08);
+  binBus.gain.setTargetAtTime(bin ? g * 0.6 : 0, now, 0.1);
+}
+function applyWater() {
+  all('[data-water]').forEach(b => b.classList.toggle('on', b.dataset.water === cfg.water));
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime, v = cfg.waterVol / 100 * 0.5;
+  streamBus.gain.setTargetAtTime(cfg.water === 'stream' ? v : 0, now, 0.4);
+  rainBus.gain.setTargetAtTime(cfg.water === 'rain' ? v : 0, now, 0.4);
+}
+function apply40() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime, on = cfg.set === 'forty';
+  const sharp = on && cfg.fortySharp, soft = on && !cfg.fortySharp;
+  pulser.gain.setTargetAtTime(sharp ? 0 : soft ? 0.5 : 1, now, 0.05);
+  pulseDepth.gain.setTargetAtTime(sharp ? 1.5 : 0, now, 0.05);
+  smoothDepth.gain.setTargetAtTime(soft ? 0.5 : 0, now, 0.05);
 }
 // The gentle sound a light makes when touched: a soft bell, pitched from the tone you chose.
 const CHIME_STEPS = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3, 2];
@@ -444,34 +551,8 @@ async function startMic() {
   }
 }
 
-// ---- 40+40 ----
-let fps = 72, lightOK = false, voiceOn = false, fortyAccepted = false, fortyMsg = '';
-function setForty(on) {
-  cfg.forty = on;
-  $('fOn').classList.toggle('on', on); $('fOff').classList.toggle('on', !on);
-  if (audioCtx) {
-    const now = audioCtx.currentTime;
-    const sharp = on && cfg.fortySharp, soft = on && !cfg.fortySharp;
-    pulser.gain.setTargetAtTime(sharp ? 0 : soft ? 0.5 : 1, now, 0.05);
-    pulseDepth.gain.setTargetAtTime(sharp ? 1.5 : 0, now, 0.05);
-    smoothDepth.gain.setTargetAtTime(soft ? 0.5 : 0, now, 0.05);
-  }
-  if (material) {
-    material.uniforms.uRest.value = on ? 0.8 : 0;
-    if (!on) material.uniforms.uFlick.value = 1;
-    pulseAmps.fill(0);
-  }
-  voiceOn = false;
-  fortyMsg = !on ? '' : ' 40+40 on. The light pulse needs the display at 120 Hz; it is checked again inside VR.';
-}
-function setSharp(v) {
-  cfg.fortySharp = v;
-  $('shOn').classList.toggle('on', v); $('shOff').classList.toggle('on', !v);
-  if (cfg.forty) setForty(true);
-}
-
 // ---- Voice level ----
-let floorDb = -60, inDb = -120, silentFor = 0, level = 0, smooth = 0;
+let floorDb = -60, inDb = -120, silentFor = 0, level = 0, smooth = 0, voiceOn = false;
 const mins = new Array(15).fill(null);
 let minSec = -1, secMax = 0;
 function levelFrom(db, floor, sens) {
@@ -493,99 +574,194 @@ function readMic() {
   level = performance.now() < micMuteUntil ? 0 : levelFrom(db, floorDb, cfg.sens);
 }
 let nextBeat = 0, lastVoiceEmit = -1e6;
+let humT = 0, quietT = 0;        // how long the current hum has lasted, and how long since it stopped
 function driveSim(t) {
   const interval = 60 / cfg.bpm;
   if (nextBeat < t - interval) nextBeat = t;
   while (t >= nextBeat) { emit(nextBeat, 1); nextBeat += interval; }
 }
-function driveVoice(t) {
+function driveVoice(t, dt, waves) {
   readMic();
   smooth += (level - smooth) * 0.25;
   if (!voiceOn && level > 0.08) { voiceOn = true; lastVoiceEmit = -1e6; }
   if (voiceOn && level < 0.04) voiceOn = false;
+  if (voiceOn) { humT += dt; quietT = 0; } else { quietT += dt; if (quietT > 0.5) humT = 0; }
   const gap = Math.max(0.04, Math.min(0.5, cfg.width * 1.2 / cfg.speed));
-  if (voiceOn && t - lastVoiceEmit >= gap) { emit(t, Math.max(0.15, level)); lastVoiceEmit = t; }
+  if (waves && voiceOn && t - lastVoiceEmit >= gap) { emit(t, Math.max(0.15, level)); lastVoiceEmit = t; }
 }
 
-// ---- Touching a light ----
+// ---- Touching a light (VR) ----
 const drift = new THREE.Vector3(0, 0, -1);        // the way you are travelling
 const lastTouch = ['', ''];
 function touchAt(ax, ay, az, t) {
-  // lights sit at half-metre marks: ..., -0.5, 0.5, 1.5, ...
-  const nx = Math.floor(ax) + 0.5, ny = Math.floor(ay) + 0.5, nz = Math.floor(az) + 0.5;
-  emit(t, 1, nx, ny, nz, drift.x, drift.y, drift.z);
-  chime(Math.round(nx * 7 + ny * 13 + nz * 29));
-  return nx + ',' + ny + ',' + nz;
+  // lights sit half a step in from each whole step of the spacing
+  const s = cfg.pitch;
+  const ix = Math.floor(ax / s), iy = Math.floor(ay / s), iz = Math.floor(az / s);
+  emit(t, 1, (ix + 0.5) * s, (iy + 0.5) * s, (iz + 0.5) * s, drift.x, drift.y, drift.z);
+  chime(ix * 7 + iy * 13 + iz * 29);
 }
 function checkTouch(i, hx, hy, hz, pressed, t) {
   // hx,hy,hz: hand position in the room. Its place in the lattice adds how far you have travelled.
-  const ax = cam.x + hx, ay = cam.y + hy, az = cam.z + hz;
-  const nx = Math.floor(ax) + 0.5, ny = Math.floor(ay) + 0.5, nz = Math.floor(az) + 0.5;
-  const key = nx + ',' + ny + ',' + nz;
-  const d2 = (ax - nx) ** 2 + (ay - ny) ** 2 + (az - nz) ** 2;
+  const s = cfg.pitch, ax = cam.x + hx, ay = cam.y + hy, az = cam.z + hz;
+  const nx = (Math.floor(ax / s) + 0.5) * s, ny = (Math.floor(ay / s) + 0.5) * s, nz = (Math.floor(az / s) + 0.5) * s;
+  const key = nx.toFixed(3) + ',' + ny.toFixed(3) + ',' + nz.toFixed(3);
+  const d2 = ((ax - nx) ** 2 + (ay - ny) ** 2 + (az - nz) ** 2) / (s * s);
   if ((d2 < 0.05 || pressed) && key !== lastTouch[i]) { lastTouch[i] = key; touchAt(ax, ay, az, t); }
   else if (d2 > 0.12 && !pressed) lastTouch[i] = '';
 }
 
-// ---- Preview controls (before you enter VR): drag to look ----
+// ---- Looking: phone motion sensors, or drag ----
+let sensor = null, sensorEvents = 0;
+const zee = new THREE.Vector3(0, 0, 1), euler = new THREE.Euler(), q0 = new THREE.Quaternion();
+const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));   // look out the back of the phone
+const D2R = Math.PI / 180;
+function onOrient(e) {
+  if (e.alpha === null || e.beta === null || e.gamma === null) return;
+  sensor = { alpha: e.alpha * D2R, beta: e.beta * D2R, gamma: e.gamma * D2R };
+  sensorEvents++;
+}
+function applySensor() {
+  const a = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
+  euler.set(sensor.beta, sensor.alpha, -sensor.gamma, 'YXZ');
+  camera.quaternion.setFromEuler(euler);
+  camera.quaternion.multiply(q1);
+  camera.quaternion.multiply(q0.setFromAxisAngle(zee, -a * D2R));
+}
+const panel = $('panel');
 let yaw = 0, pitch = 0, dragging = false, lx = 0, ly = 0;
-renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; });
-addEventListener('pointerup', () => { dragging = false; });
+let holding = false, boostHold = 0, downAt = 0, moved = 0, hideTimer = 0, autoHide = true;
+function showPanel() {
+  panel.classList.remove('away');
+  clearTimeout(hideTimer);
+  if (autoHide) hideTimer = setTimeout(() => panel.classList.add('away'), 9000);
+}
+panel.addEventListener('pointerdown', showPanel);
+panel.addEventListener('input', showPanel);
+renderer.domElement.addEventListener('pointerdown', e => {
+  dragging = true; holding = true; lx = e.clientX; ly = e.clientY; downAt = performance.now(); moved = 0;
+});
+addEventListener('pointerup', () => {
+  if (holding && performance.now() - downAt < 280 && moved < 12) {
+    if (panel.classList.contains('away')) showPanel(); else panel.classList.add('away');
+  }
+  dragging = false; holding = false;
+});
+addEventListener('pointercancel', () => { dragging = false; holding = false; });
 addEventListener('pointermove', e => {
   if (!dragging) return;
-  yaw += (e.clientX - lx) * 0.005;
-  pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - ly) * 0.005));
+  moved += Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly);
+  if (!sensor) {
+    yaw += (e.clientX - lx) * 0.005;
+    pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - ly) * 0.005));
+  }
   lx = e.clientX; ly = e.clientY;
 });
 
-// ---- Panel ----
+// ---- Menus ----
+function openTab(name) {
+  all('.sec').forEach(s => s.classList.toggle('open', s.id === 'sec-' + name && !s.classList.contains('open')));
+  all('[data-tab]').forEach(b => b.classList.toggle('on', $('sec-' + b.dataset.tab).classList.contains('open')));
+}
+all('[data-tab]').forEach(b => b.addEventListener('click', () => openTab(b.dataset.tab)));
+
 const statusEl = $('status');
-let baseMsg = '';
+let lookMsg = '', setMsg = '';
 function setMode(m) {
   cfg.mode = m;
   document.body.className = m;
   $('mVoice').classList.toggle('on', m === 'voice'); $('mSim').classList.toggle('on', m === 'sim');
   if (pulseAmps) pulseAmps.fill(0);
-  voiceOn = false; smooth = 0; level = 0;
+  voiceOn = false; smooth = 0; level = 0; humT = 0;
 }
-$('mSim').addEventListener('click', () => setMode('sim'));
+$('mSim').addEventListener('click', () => { if (cfg.set === 'hum') setSet('none'); setMode('sim'); });
 $('mVoice').addEventListener('click', async () => {
   if (await startMic()) setMode('voice');
-  else statusEl.textContent = 'Microphone not available (' + micError + '). Allow it for this site, then tap Voice again.';
+  else setMsg = ' Microphone not available (' + micError + '). Allow it for this site, then tap Voice again.';
 });
 $('sOn').addEventListener('click', () => setSound(true));
 $('sOff').addEventListener('click', () => setSound(false));
 $('eOn').addEventListener('click', () => setEcho(true));
 $('eOff').addEventListener('click', () => setEcho(false));
+all('[data-water]').forEach(b => b.addEventListener('click', () => { cfg.water = b.dataset.water; waterBySet = false; applyWater(); }));
+all('[data-lights]').forEach(b => b.addEventListener('click', () => setLights(b.dataset.lights)));
+function setLights(v) {
+  cfg.lights = v;
+  all('[data-lights]').forEach(b => b.classList.toggle('on', b.dataset.lights === v));
+}
+
+// ---- Sets: one-tap modes. Only one runs at a time. ----
+let fortyAccepted = false, waterBySet = false, setStart = 0, fps = 60, lightOK = false;
+async function setSet(name) {
+  if (name === 'forty' && !fortyAccepted) { $('warn').style.display = 'flex'; return; }
+  if (name === 'hum' && cfg.mode !== 'voice') {
+    if (await startMic()) setMode('voice');
+    else { setMsg = ' Humming needs the microphone (' + micError + ').'; name = 'none'; }
+  }
+  const prev = cfg.set;
+  cfg.set = name;
+  setStart = clock.getElapsedTime();
+  setMsg = '';
+  all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === name));
+  all('.opt').forEach(o => { o.style.display = o.classList.contains('opt-' + name) ? (o.classList.contains('row') ? 'flex' : 'block') : 'none'; });
+  // leaving a Set puts back what it changed
+  if (prev === 'water' && name !== 'water' && waterBySet) { cfg.water = 'off'; waterBySet = false; }
+  if (name === 'water' && cfg.water === 'off') { cfg.water = 'stream'; waterBySet = true; }
+  if (name === 'forty' || name === 'breath' || prev === 'forty' || prev === 'breath') { if (pulseAmps) pulseAmps.fill(0); voiceOn = false; }
+  if (material && name !== 'forty') material.uniforms.uFlick.value = 1;
+  if (audioCtx && name !== 'breath') breathG.gain.setTargetAtTime(1, audioCtx.currentTime, 0.3);
+  humT = 0; mixNow = 0;
+  $('cue').style.display = name === 'breath' ? 'block' : 'none';
+  applyWater(); applyTone(); apply40();
+}
+all('[data-set]').forEach(b => b.addEventListener('click', () => setSet(b.dataset.set)));
+$('warnNo').addEventListener('click', () => { $('warn').style.display = 'none'; });
+$('warnYes').addEventListener('click', () => { $('warn').style.display = 'none'; fortyAccepted = true; setSet('forty'); showPanel(); });
+function setSharp(v) {
+  cfg.fortySharp = v;
+  $('shOn').classList.toggle('on', v); $('shOff').classList.toggle('on', !v);
+  apply40();
+}
 $('shOn').addEventListener('click', () => setSharp(true));
 $('shOff').addEventListener('click', () => setSharp(false));
-$('fOn').addEventListener('click', () => { if (!cfg.forty) $('warn').style.display = 'flex'; });
-$('fOff').addEventListener('click', () => setForty(false));
-$('warnNo').addEventListener('click', () => { $('warn').style.display = 'none'; });
-$('warnYes').addEventListener('click', () => { $('warn').style.display = 'none'; fortyAccepted = true; setForty(true); });
+function setPattern(p) {
+  cfg.pattern = p; setStart = clock ? clock.getElapsedTime() : 0;
+  all('[data-pat]').forEach(b => b.classList.toggle('on', b.dataset.pat === p));
+}
+all('[data-pat]').forEach(b => b.addEventListener('click', () => setPattern(b.dataset.pat)));
+function setBeat(v) {
+  cfg.beat = v;
+  all('[data-beat]').forEach(b => b.classList.toggle('on', Number(b.dataset.beat) === v));
+  applyTone();
+}
+all('[data-beat]').forEach(b => b.addEventListener('click', () => setBeat(Number(b.dataset.beat))));
+
 function readControls() {
   cfg.bpm = Number($('bpm').value); cfg.speed = Number($('spd').value);
   cfg.sens = Number($('sens').value); cfg.drift = Number($('drift').value);
   cfg.toneHz = Number($('hz').value); cfg.toneVol = Number($('tvol').value);
+  cfg.pitch = Number($('pitch').value); cfg.waterVol = Number($('wvol').value); cfg.goal = Number($('goal').value);
   $('bpmV').textContent = cfg.bpm + ' BPM';
   $('spdV').textContent = cfg.speed.toFixed(1) + ' m/s';
   $('sensV').textContent = cfg.sens + ' / 10';
   $('driftV').textContent = cfg.drift.toFixed(1) + ' m/s';
   $('hzV').textContent = cfg.toneHz + ' Hz';
   $('tvolV').textContent = cfg.toneVol + '%';
-  applyTone();
+  $('pitchV').textContent = cfg.pitch.toFixed(2) + ' m';
+  $('wvolV').textContent = cfg.waterVol + '%';
+  $('goalV').textContent = cfg.goal + ' s';
+  applyTone(); applyWater();
 }
-['bpm', 'spd', 'sens', 'drift', 'hz', 'tvol'].forEach(id => $(id).addEventListener('input', readControls));
-function nudgeHz(by) { const el = $('hz'); el.value = Math.max(40, Math.min(1000, Number(el.value) + by)); readControls(); }
+['bpm', 'spd', 'sens', 'drift', 'hz', 'tvol', 'pitch', 'wvol', 'goal'].forEach(id => $(id).addEventListener('input', readControls));
+function nudgeHz(by) { const el = $('hz'); el.value = Math.max(40, Math.min(1000, Number(el.value) + by)); readControls(); showPanel(); }
 $('hzDn').addEventListener('click', () => nudgeHz(-1));
 $('hzUp').addEventListener('click', () => nudgeHz(1));
-readControls(); setSound(true); setEcho(false); setForty(false); setSharp(true);
 
-document.querySelectorAll('[data-hs]').forEach(b => b.addEventListener('click', () => {
+all('[data-hs]').forEach(b => b.addEventListener('click', () => {
   headset = b.dataset.hs;
-  document.querySelectorAll('[data-hs]').forEach(o => o.classList.toggle('on', o === b));
+  all('[data-hs]').forEach(o => o.classList.toggle('on', o === b));
 }));
 
+// A copy left open in another tab must not keep sounding: go quiet whenever this page is hidden.
 document.addEventListener('visibilitychange', () => {
   if (!audioCtx || renderer.xr.isPresenting) return;
   if (document.hidden) audioCtx.suspend(); else audioCtx.resume();
@@ -593,23 +769,45 @@ document.addEventListener('visibilitychange', () => {
 
 // ---- Start, and entering VR ----
 let started = false, vrSupported = false;
+const clock = new THREE.Clock();
+(async () => {
+  try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
+  if (vrSupported) {
+    $('hsRow').style.display = 'flex';
+    $('intro').textContent = 'A lattice of lights that never ends, dark until your voice wakes it. Choose your headset, then Enter. Set things up on the next screen, then press Enter VR.';
+    autoHide = false;
+  }
+})();
+readControls(); setSound(true); setEcho(false); setSharp(true); setLights('sound'); setPattern('coh'); setBeat(6);
+all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === 'none'));
+applyWater();
+
 $('go').addEventListener('click', async () => {
-  startAudio();
+  startAudio();                                   // must begin inside the tap
+  if (!vrSupported) { headset = 'max'; try { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); } catch (err) {} }
+  let allowed = true;
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      allowed = (await DeviceOrientationEvent.requestPermission()) === 'granted';
+    }
+  } catch (err) { allowed = false; }
+  if (allowed && !vrSupported) addEventListener('deviceorientation', onOrient);
   buildLattice();
   const mic = await startMic();
   if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch (err) {} }
   setMode(mic ? 'voice' : 'sim');
-  try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
+  try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (err) {}
   $('start').style.display = 'none';
-  $('panel').style.display = 'block';
+  panel.style.display = 'block';
   $('enterVR').style.display = vrSupported ? 'block' : 'none';
-  baseMsg = HEADSETS[headset].label + ': ' + (N * N * N).toLocaleString() + ' lights per block. ' +
-    (vrSupported
-      ? 'Set things up here, then press Enter VR. In VR: right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. A button turns 40+40 on and off once you have accepted its warning here.'
-      : 'This browser has no VR, so this is a preview: drag to look. Open this page in the Quest browser for VR.') +
-    (mic ? '' : ' Microphone not available (' + micError + '): using simulated pulse.');
-  statusEl.textContent = baseMsg;
+  showPanel();
   started = true;
+  setTimeout(() => {
+    lookMsg = vrSupported
+      ? HEADSETS[headset].label + ': ' + (N * N * N).toLocaleString() + ' lights per block. Set things up here, then press Enter VR. In VR: right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. The A button turns 40+40 on and off once you have accepted its warning here.'
+      : (sensorEvents > 0 ? 'Motion sensors on.' : 'No motion sensor data: drag to look.') + ' Tap the screen to show or hide the menus.';
+    if (!mic) lookMsg += ' Microphone not available (' + micError + '): using simulated pulse.';
+  }, 1500);
 });
 $('enterVR').addEventListener('click', async () => {
   try {
@@ -622,14 +820,15 @@ $('enterVR').addEventListener('click', async () => {
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     session.addEventListener('end', () => { hands[0].set(0, -99, 0); hands[1].set(0, -99, 0); });
   } catch (err) {
-    statusEl.textContent = 'Could not start VR (' + ((err && err.name) || 'error') + ').';
+    setMsg = ' Could not start VR (' + ((err && err.name) || 'error') + ').';
   }
 });
 
 // ---- Animation loop ----
-const clock = new THREE.Clock();
 const fwd = new THREE.Vector3(), quat = new THREE.Quaternion(), tmp = new THREE.Vector3();
-let lastT = 0, lastFrame = 0, uiTimer = 0, boostAxis = 0, aWas = false;
+let lastT = 0, lastFrame = 0, uiTimer = 0, boostAxis = 0, aWas = false, mixNow = 0, restNow = 0;
+const colNow = [1, 1, 1];
+const ease = x => x * x * (3 - 2 * x);
 renderer.setAnimationLoop((ms, frame) => {
   const t = clock.getElapsedTime();
   const dt = Math.min(0.1, t - lastT); lastT = t;
@@ -637,6 +836,7 @@ renderer.setAnimationLoop((ms, frame) => {
   lastFrame = ms;
   if (!started) { renderer.render(scene, camera); return; }
   const inVR = renderer.xr.isPresenting && frame;
+  const set = cfg.set;
 
   // where your head is and which way you face
   let stick = 0, aNow = false;
@@ -668,39 +868,71 @@ renderer.setAnimationLoop((ms, frame) => {
       }
       if (hp && hi < 2) {
         hands[hi].set(hp.x - head.x, hp.y - head.y, hp.z - head.z);
-        if (!cfg.forty) checkTouch(hi, hp.x, hp.y, hp.z, pressed, t);
+        if (set !== 'forty' && set !== 'breath') checkTouch(hi, hp.x, hp.y, hp.z, pressed, t);
         hi++;
       }
     }
     for (; hi < 2; hi++) hands[hi].set(0, -99, 0);
   } else {
     head.set(0, 0, 0);
-    camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    if (sensor) applySensor(); else camera.rotation.set(pitch, yaw, 0, 'YXZ');
     camera.getWorldDirection(fwd);
   }
-  if (aNow && !aWas && fortyAccepted) setForty(!cfg.forty);
+  if (aNow && !aWas && fortyAccepted) setSet(set === 'forty' ? 'none' : 'forty');
   aWas = aNow;
 
-  // 40+40 light: 40 Hz is exactly 3 frames at 120 frames a second
-  lightOK = fps > 110 && fps < 130;
-  if (cfg.forty) {
-    material.uniforms.uFlick.value = lightOK ? (Math.round(ms / (1000 / 120)) % 3 === 0 ? 1.0 : 0.35) : 1.0;
+  // waves: off in 40+40 and Slow breath, where the lights follow the Set instead
+  const waves = set !== 'forty' && set !== 'breath';
+  if (cfg.mode === 'voice') driveVoice(t, dt, waves);
+  else if (waves) driveSim(t);
+
+  // what the Set does to the lights
+  let rest = cfg.lights === 'always' ? 0.3 : 0, mixT = 0, col = colNow, flick = 1;
+  if (set === 'water') rest = Math.max(rest, 0.3);
+  if (set === 'forty') {
+    rest = 0.8;
+    lightOK = fps > 110 && fps < 130;       // 40 Hz is exactly 3 frames at 120 frames a second
+    if (lightOK) flick = Math.round(ms / (1000 / 120)) % 3 === 0 ? 1.0 : 0.35;
+    setMsg = lightOK ? ' 40+40 on: light and sound at 40 Hz.'
+      : ' 40+40 on: sound at 40 Hz. The light pulse needs the display at 120 Hz (this one is running at ' + Math.round(fps) + ').';
   }
+  if (set === 'breath') {
+    const pat = PATTERNS[cfg.pattern], total = pat[0] + pat[1] + pat[2] + pat[3];
+    let x = (t - setStart) % total, ph = 0;
+    while (x >= pat[ph]) { x -= pat[ph]; ph++; }
+    const k = pat[ph] > 0 ? x / pat[ph] : 0;
+    const b = ph === 0 ? 0.12 + 0.78 * ease(k) : ph === 1 ? 0.9 : ph === 2 ? 0.9 - 0.78 * ease(k) : 0.12;
+    rest = b; mixT = 0.92;
+    col = ph === 0 ? COL_IN : ph === 2 ? COL_OUT : COL_HOLD;
+    if (audioCtx) breathG.gain.setTargetAtTime(0.25 + 0.75 * (b - 0.12) / 0.78, audioCtx.currentTime, 0.08);
+    const cue = (ph === 0 ? 'Breathe in' : ph === 2 ? 'Breathe out' : 'Hold') + '  ' + Math.ceil(pat[ph] - x);
+    if ($('cue').textContent !== cue) $('cue').textContent = cue;
+  }
+  if (set === 'hum') {
+    const done = humT >= cfg.goal;
+    if (done) { mixT = 0.95; col = COL_FUCHSIA; }
+    setMsg = ' Hum ' + Math.min(humT, 999).toFixed(1) + ' of ' + cfg.goal + ' s' + (done ? ': goal reached.' : '.');
+  }
+  mixNow += (mixT - mixNow) * Math.min(1, dt * (mixT > mixNow ? 5 : 1.2));
+  restNow += (rest - restNow) * Math.min(1, dt * 6);
+  if (mixT > 0) for (let i = 0; i < 3; i++) colNow[i] += (col[i] - colNow[i]) * Math.min(1, dt * 5);
+  setCol.set(colNow[0], colNow[1], colNow[2]);
+  material.uniforms.uSetMix.value = mixNow;
+  material.uniforms.uRest.value = set === 'breath' ? rest : restNow;
+  material.uniforms.uFlick.value = flick;
 
-  // waves
-  if (cfg.forty) { if (cfg.mode === 'voice') { readMic(); smooth += (level - smooth) * 0.25; } }
-  else if (cfg.mode === 'voice') driveVoice(t); else driveSim(t);
-
-  // travel: a slow drift the way you face; the thumbstick speeds you up or stops you
+  // travel: a slow drift the way you face; touch and hold (phone) or thumbstick (VR) changes speed
   boostAxis += (stick - boostAxis) * Math.min(1, dt * 3);
-  const v = Math.max(0, cfg.drift + boostAxis * 6);
+  boostHold += ((holding ? 1 : 0) - boostHold) * Math.min(1, dt * 3);
+  const v = Math.max(0, cfg.drift + boostAxis * 6 + boostHold * 4);
   drift.copy(fwd);
   cam.x += fwd.x * v * dt; cam.y += fwd.y * v * dt; cam.z += fwd.z * v * dt;
 
   // everything is drawn around your head; your place in the lattice is travel plus real movement
   world.position.copy(head);
   const px = cam.x + head.x, py = cam.y + head.y, pz = cam.z + head.z;
-  camUniform.set(wrap(px), wrap(py), wrap(pz));
+  camUniform.set(wrap(px / cfg.pitch), wrap(py / cfg.pitch), wrap(pz / cfg.pitch));   // in lattice steps
+  material.uniforms.uPitch.value = cfg.pitch;
   for (let i = 0; i < SLOTS; i++) {
     pulseRel[i * 3] = pulseWorld[i * 3] - px;
     pulseRel[i * 3 + 1] = pulseWorld[i * 3 + 1] - py;
@@ -713,23 +945,30 @@ renderer.setAnimationLoop((ms, frame) => {
   starMat.uniforms.uDpr.value = H / 800;
   material.uniforms.uTime.value = t;
   material.uniforms.uSpeed.value = cfg.speed;
-  material.uniforms.uLevel.value = (cfg.mode === 'voice' && !cfg.forty) ? smooth : 0;
+  material.uniforms.uLevel.value = (cfg.mode === 'voice' && waves) ? smooth : 0;
   starMat.uniforms.uTime.value = t;
   renderer.render(scene, camera);
 
   if (!inVR && t - uiTimer > 0.1) {
     uiTimer = t;
+    let s = lookMsg;
     if (cfg.mode === 'voice') {
       $('meterFill').style.width = Math.round(smooth * 100) + '%';
       $('lvlV').textContent = Math.round(smooth * 100) + '%';
+      s = (analyser && silentFor >= 3)
+        ? 'The microphone is sending silence. Another app may be using it (a screen recorder or a call). Close that, then reload.'
+        : lookMsg + ' Mic in ' + Math.round(inDb) + ' dB, room ' + Math.round(floorDb) + ' dB.';
     }
-    statusEl.textContent = (analyser && silentFor >= 3)
-      ? 'The microphone is sending silence. Another app may be using it. Close that, then reload.'
-      : baseMsg + fortyMsg;
+    if (set !== 'forty' && set !== 'hum' && setMsg.indexOf('40+40') >= 0) setMsg = '';
+    if (set !== 'hum' && setMsg.indexOf(' Hum ') === 0) setMsg = '';
+    statusEl.textContent = s + setMsg;
   }
 });
 // for testing from the browser console
-window.pulseLattice = { touch: (x, y, z) => touchAt(cam.x + x, cam.y + y, cam.z + z, clock.getElapsedTime()) };
+window.pulseLattice = {
+  touch: (x, y, z) => touchAt(cam.x + x, cam.y + y, cam.z + z, clock.getElapsedTime()),
+  state: () => ({ set: cfg.set, mode: cfg.mode, lights: cfg.lights, water: cfg.water, humT, mix: mixNow, rest: material ? material.uniforms.uRest.value : 0, col: colNow.slice(), fps })
+};
 </script>
 </body>
 </html>

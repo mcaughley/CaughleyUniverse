@@ -2,5 +2,7 @@
 
 An endless lattice of lights, dark until your voice sends a wave through it.
 
-- Phone version: https://mcaughley.github.io/pulse-lattice/
-- Meta Quest (VR) version: https://mcaughley.github.io/pulse-lattice/vr.html
+One page serves both phone and headset:
+
+- Phone: https://mcaughley.github.io/pulse-lattice/
+- Meta Quest (VR): open the same address in the Quest browser (vr.html is an identical copy, kept so older links work)

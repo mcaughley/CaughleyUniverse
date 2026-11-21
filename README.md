@@ -1,10 +1,10 @@
-# pulse-lattice
+# Caughley Universe
 
 An endless lattice of lights, dark until your voice sends a wave through it.
 
 One page serves phone, PC and headset:
 
-- https://mcaughley.github.io/pulse-lattice/
+- https://mcaughley.github.io/CaughleyUniverse/
 - `vr.html` is an identical copy, kept so older links work.
 
 ## Soundscapes

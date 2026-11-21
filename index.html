@@ -128,7 +128,7 @@ const HEADSETS = {
 let headset = 'q3';
 const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, pitch: 0.5,
               sound: false, echo: false, toneHz: 432, toneVol: 0, scape: 'off', scapeVol: 60, reach: 1,
-              lights: 'sound', faces: false, jitter: 0, set: 'pulse', bg: 'space', light: 'natural', deep: true, fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
+              lights: 'always', faces: false, jitter: 0, set: 'pulse', bg: 'space', light: 'natural', deep: true, fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
 // Breathing patterns, in seconds: in, hold, out, hold
 const PATTERNS = { coh: [5, 0, 5, 0], box: [4, 4, 4, 4], '478': [4, 7, 8, 0] };
 const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.65, 0.48, 1.00], COL_FUCHSIA = [1.00, 0.08, 0.78];
@@ -1139,7 +1139,7 @@ all('[data-dev]').forEach(b => b.addEventListener('click', () => setDevice(b.dat
 (async () => {
   try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
 })();
-readControls(); setSound(false); setEcho(false); setSharp(true); setLights('sound'); setDeep(true); setBackground('space'); setLightColour('natural'); setFaces(true); setPattern('coh'); setBeat(6);
+readControls(); setSound(false); setEcho(false); setSharp(true); setLights('always'); setDeep(true); setBackground('space'); setLightColour('natural'); setFaces(true); setPattern('coh'); setBeat(6);
 all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === 'pulse'));
 document.body.dataset.active = 'pulse';
 setReach(1);

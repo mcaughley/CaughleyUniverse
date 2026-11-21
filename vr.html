@@ -772,6 +772,10 @@ let started = false, vrSupported = false;
 const clock = new THREE.Clock();
 (async () => {
   try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
+  // Phones also report that they can do VR (for cardboard viewers). Treat a phone as a phone: motion sensors, no headset choice.
+  const ua = navigator.userAgent || '';
+  const isHeadset = /OculusBrowser|Quest|Pico|Wolvic|VisionOS/i.test(ua);
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) && !isHeadset) vrSupported = false;
   if (vrSupported) {
     $('hsRow').style.display = 'flex';
     $('intro').textContent = 'A lattice of lights that never ends, dark until your voice wakes it. Choose your headset, then Enter. Set things up on the next screen, then press Enter VR.';

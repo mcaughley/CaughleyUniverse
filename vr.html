@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pulse Lattice</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif}
+#hud{position:fixed;left:12px;top:12px;color:#9fd8ff;font-size:14px;line-height:1.5;pointer-events:none;white-space:pre}
+</style>
+</head>
+<body>
+<div id="hud"></div>
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+// ---- Settings ----
+const N = 50;            // nodes per axis: 50 m cube at 1 m pitch
+const PITCH = 1.0;       // metres between lights
+const SLOTS = 16;        // max simultaneous pulse rings
+const EYE_HEIGHT = 1.6;  // metres from floor to head
+
+const cfg = { bpm: 60, speed: 3.0, width: 0.6, tail: 3.0 };
+
+// ---- Lattice positions (centred on the viewer) ----
+const HALF = (N - 1) * PITCH / 2;
+const count = N * N * N;
+const positions = new Float32Array(count * 3);
+let p = 0;
+for (let i = 0; i < N; i++)
+  for (let j = 0; j < N; j++)
+    for (let k = 0; k < N; k++) {
+      positions[p++] = i * PITCH - HALF;
+      positions[p++] = j * PITCH - HALF;
+      positions[p++] = k * PITCH - HALF;
+    }
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+// ---- Pulse timing ----
+const pulseTimes = new Float32Array(SLOTS).fill(-1e6);
+let slot = 0;
+let nextBeat = 0;
+
+// ---- Shader: each light brightens as a wavefront passes it ----
+const material = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uPulseT: { value: pulseTimes },
+    uSpeed: { value: cfg.speed },
+    uWidth: { value: cfg.width },
+    uTail: { value: cfg.tail },
+    uScale: { value: 30 }
+  },
+  vertexShader: `
+    uniform float uTime;
+    uniform float uPulseT[${SLOTS}];
+    uniform float uSpeed;
+    uniform float uWidth;
+    uniform float uTail;
+    uniform float uScale;
+    varying float vGlow;
+    void main() {
+      float d = length(position);   // distance from the viewer
+      float g = 0.0;
+      for (int i = 0; i < ${SLOTS}; i++) {
+        float age = uTime - uPulseT[i];
+        if (age < 0.0) continue;
+        float r = age * uSpeed;      // wavefront radius
+        float ahead = (d - r) / uWidth;
+        float front = exp(-ahead * ahead);
+        float trail = (d < r) ? exp(-(r - d) / uTail) : 0.0;
+        g += (front + 0.5 * trail) * exp(-age * 0.25);
+      }
+      vGlow = clamp(g, 0.0, 1.0);
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = min(40.0, (1.5 + 5.0 * vGlow) * uScale / max(0.1, -mv.z));
+    }
+  `,
+  fragmentShader: `
+    varying float vGlow;
+    void main() {
+      vec2 c = gl_PointCoord - vec2(0.5);
+      float a = smoothstep(0.5, 0.0, length(c));
+      vec3 base = vec3(0.10, 0.18, 0.32);
+      vec3 hot = vec3(0.65, 0.95, 1.0);
+      gl_FragColor = vec4(mix(base, hot, vGlow), a * (0.25 + 0.75 * vGlow));
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
+});
+const points = new THREE.Points(geometry, material);
+
+// ---- Scene and viewer ----
+const scene = new THREE.Scene();
+scene.add(points);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 200);
+const dolly = new THREE.Group();   // lowered in VR so your head sits at the lattice centre
+dolly.add(camera);
+scene.add(dolly);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+document.body.appendChild(VRButton.createButton(renderer));
+
+renderer.xr.addEventListener('sessionstart', () => { dolly.position.y = -EYE_HEIGHT; });
+renderer.xr.addEventListener('sessionend', () => { dolly.position.y = 0; });
+
+// ---- Desktop test controls: drag to look, arrow keys to tune ----
+let yaw = 0, pitch = 0, dragging = false, lx = 0, ly = 0;
+renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; });
+addEventListener('pointerup', () => { dragging = false; });
+addEventListener('pointermove', e => {
+  if (!dragging || renderer.xr.isPresenting) return;
+  yaw -= (e.clientX - lx) * 0.004;
+  pitch = Math.max(-1.5, Math.min(1.5, pitch - (e.clientY - ly) * 0.004));
+  lx = e.clientX; ly = e.clientY;
+  camera.rotation.set(pitch, yaw, 0, 'YXZ');
+});
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowUp') cfg.bpm += 5;
+  if (e.key === 'ArrowDown') cfg.bpm = Math.max(20, cfg.bpm - 5);
+  if (e.key === 'ArrowRight') cfg.speed += 0.5;
+  if (e.key === 'ArrowLeft') cfg.speed = Math.max(0.5, cfg.speed - 0.5);
+});
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---- Animation loop ----
+const clock = new THREE.Clock();
+const hud = document.getElementById('hud');
+let hudTimer = -1;
+renderer.setAnimationLoop(() => {
+  const t = clock.getElapsedTime();
+  const interval = 60 / cfg.bpm;
+  while (t >= nextBeat) {          // each beat starts a new ring at the viewer
+    pulseTimes[slot] = nextBeat;
+    slot = (slot + 1) % SLOTS;
+    nextBeat += interval;
+  }
+  material.uniforms.uTime.value = t;
+  material.uniforms.uSpeed.value = cfg.speed;
+  renderer.render(scene, camera);
+  if (t - hudTimer > 0.5) {
+    hudTimer = t;
+    hud.textContent = `Simulated pulse: ${cfg.bpm} BPM\nWave speed: ${cfg.speed.toFixed(1)} m/s\n${count.toLocaleString()} lights`;
+  }
+});
+</script>
+</body>
+</html>

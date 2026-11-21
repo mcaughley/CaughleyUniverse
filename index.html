@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pulse Lattice</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif;color:#9fd8ff;touch-action:none;-webkit-user-select:none;user-select:none}
+canvas{display:block}
+#start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#000;z-index:10;text-align:center;padding:24px}
+#start h1{font-weight:300;letter-spacing:.2em;font-size:22px;margin:0}
+#start p{margin:0;max-width:300px;font-size:14px;line-height:1.5;color:#6f9fc4}
+#go{font-size:17px;padding:14px 34px;border-radius:30px;border:1px solid #9fd8ff;background:transparent;color:#9fd8ff}
+#panel{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(0,0,0,.55);font-size:13px;display:none}
+#panel.hidden .rows{display:none}
+.row{display:flex;align-items:center;gap:10px;margin:6px 0}
+.row label{width:92px}
+.row input{flex:1}
+.row span{width:64px;text-align:right}
+#toggle{background:none;border:0;color:#6f9fc4;font-size:13px;padding:4px 0}
+#status{color:#6f9fc4;font-size:12px;margin-top:2px}
+</style>
+</head>
+<body>
+<div id="start">
+  <h1>PULSE LATTICE</h1>
+  <p>You are at the centre of a 50 m cube of lights. Turn and tilt your phone to look around.</p>
+  <button id="go">Enter</button>
+</div>
+<div id="panel">
+  <button id="toggle">Hide controls</button>
+  <div class="rows">
+    <div class="row"><label for="bpm">Pulse</label><input id="bpm" type="range" min="30" max="140" step="1" value="60"><span id="bpmV"></span></div>
+    <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="10" step="0.5" value="3"><span id="spdV"></span></div>
+    <div id="status"></div>
+  </div>
+</div>
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ---- Settings ----
+const N = 50;            // nodes per axis: 50 m cube at 1 m pitch
+const PITCH = 1.0;       // metres between lights
+const SLOTS = 16;        // max simultaneous pulse rings
+const cfg = { bpm: 60, speed: 3.0, width: 0.6, tail: 3.0 };
+
+// ---- Lattice positions. Viewer sits at the origin, midway between nodes ----
+const HALF = (N - 1) * PITCH / 2;
+const count = N * N * N;
+const positions = new Float32Array(count * 3);
+let p = 0;
+for (let i = 0; i < N; i++)
+  for (let j = 0; j < N; j++)
+    for (let k = 0; k < N; k++) {
+      positions[p++] = i * PITCH - HALF;
+      positions[p++] = j * PITCH - HALF;
+      positions[p++] = k * PITCH - HALF;
+    }
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), HALF * 1.75);
+
+// ---- Pulse timing ----
+const pulseTimes = new Float32Array(SLOTS).fill(-1e6);
+let slot = 0;
+let nextBeat = 0;
+
+// ---- Shader: each light brightens as a wavefront passes it ----
+const material = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uPulseT: { value: pulseTimes },
+    uSpeed: { value: cfg.speed },
+    uWidth: { value: cfg.width },
+    uTail: { value: cfg.tail },
+    uScale: { value: 30 }
+  },
+  vertexShader: `
+    uniform float uTime;
+    uniform float uPulseT[${SLOTS}];
+    uniform float uSpeed;
+    uniform float uWidth;
+    uniform float uTail;
+    uniform float uScale;
+    varying float vGlow;
+    void main() {
+      float d = length(position);   // distance from the viewer
+      float g = 0.0;
+      for (int i = 0; i < ${SLOTS}; i++) {
+        float age = uTime - uPulseT[i];
+        if (age >= 0.0) {
+          float r = age * uSpeed;      // wavefront radius
+          float ahead = (d - r) / uWidth;
+          float front = exp(-ahead * ahead);
+          float trail = (d < r) ? exp(-(r - d) / uTail) : 0.0;
+          g += (front + 0.5 * trail) * exp(-age * 0.25);
+        }
+      }
+      vGlow = clamp(g, 0.0, 1.0);
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv;
+      gl_PointSize = min(48.0, (1.5 + 5.0 * vGlow) * uScale / max(0.1, -mv.z));
+    }
+  `,
+  fragmentShader: `
+    varying float vGlow;
+    void main() {
+      vec2 c = gl_PointCoord - vec2(0.5);
+      float a = smoothstep(0.5, 0.0, length(c));
+      vec3 base = vec3(0.10, 0.18, 0.32);
+      vec3 hot = vec3(0.65, 0.95, 1.0);
+      gl_FragColor = vec4(mix(base, hot, vGlow), a * (0.25 + 0.75 * vGlow));
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
+});
+
+const scene = new THREE.Scene();
+scene.add(new THREE.Points(geometry, material));
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 200);
+
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+renderer.setPixelRatio(DPR);
+renderer.setSize(innerWidth, innerHeight);
+material.uniforms.uScale.value = 30 * DPR;
+document.body.appendChild(renderer.domElement);
+
+function resize() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', resize);
+
+// ---- Look control 1: phone motion sensors ----
+let sensor = null;          // latest {alpha, beta, gamma} in radians
+let sensorEvents = 0;
+const zee = new THREE.Vector3(0, 0, 1);
+const euler = new THREE.Euler();
+const q0 = new THREE.Quaternion();
+const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // look out the back of the phone
+const D2R = Math.PI / 180;
+
+function onOrient(e) {
+  if (e.alpha === null || e.beta === null || e.gamma === null) return;
+  sensor = { alpha: e.alpha * D2R, beta: e.beta * D2R, gamma: e.gamma * D2R };
+  sensorEvents++;
+}
+function screenAngle() {
+  const a = (screen.orientation && typeof screen.orientation.angle === 'number')
+    ? screen.orientation.angle : (window.orientation || 0);
+  return a * D2R;
+}
+function applySensor() {
+  euler.set(sensor.beta, sensor.alpha, -sensor.gamma, 'YXZ');
+  camera.quaternion.setFromEuler(euler);
+  camera.quaternion.multiply(q1);
+  camera.quaternion.multiply(q0.setFromAxisAngle(zee, -screenAngle()));
+}
+
+// ---- Look control 2: drag (fallback when there are no motion sensors) ----
+let yaw = 0, pitch = 0, dragging = false, lx = 0, ly = 0;
+renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; });
+addEventListener('pointerup', () => { dragging = false; });
+addEventListener('pointercancel', () => { dragging = false; });
+addEventListener('pointermove', e => {
+  if (!dragging || sensor) return;
+  yaw += (e.clientX - lx) * 0.005;
+  pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - ly) * 0.005));
+  lx = e.clientX; ly = e.clientY;
+});
+
+// ---- Start button (a tap is required before sensors can be read on some phones) ----
+const statusEl = document.getElementById('status');
+document.getElementById('go').addEventListener('click', async () => {
+  let allowed = true;
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      allowed = (await DeviceOrientationEvent.requestPermission()) === 'granted';
+    }
+  } catch (err) { allowed = false; }
+  if (allowed) addEventListener('deviceorientation', onOrient);
+  document.getElementById('start').style.display = 'none';
+  document.getElementById('panel').style.display = 'block';
+  setTimeout(() => {
+    statusEl.textContent = sensorEvents > 0
+      ? 'Motion sensors on: move the phone to look around.'
+      : 'No motion sensor data: drag the screen to look around.';
+  }, 1500);
+});
+
+// ---- Controls ----
+const bpm = document.getElementById('bpm'), spd = document.getElementById('spd');
+const bpmV = document.getElementById('bpmV'), spdV = document.getElementById('spdV');
+function readControls() {
+  cfg.bpm = Number(bpm.value);
+  cfg.speed = Number(spd.value);
+  bpmV.textContent = cfg.bpm + ' BPM';
+  spdV.textContent = cfg.speed.toFixed(1) + ' m/s';
+}
+bpm.addEventListener('input', readControls);
+spd.addEventListener('input', readControls);
+readControls();
+const panel = document.getElementById('panel'), toggle = document.getElementById('toggle');
+toggle.addEventListener('click', () => {
+  toggle.textContent = panel.classList.toggle('hidden') ? 'Show controls' : 'Hide controls';
+});
+
+// ---- Animation loop ----
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const t = clock.getElapsedTime();
+  const interval = 60 / cfg.bpm;
+  if (nextBeat < t - interval) nextBeat = t;   // after a pause, don't replay missed beats
+  while (t >= nextBeat) {                      // each beat starts a new ring at the viewer
+    pulseTimes[slot] = nextBeat;
+    slot = (slot + 1) % SLOTS;
+    nextBeat += interval;
+  }
+  material.uniforms.uTime.value = t;
+  material.uniforms.uSpeed.value = cfg.speed;
+  if (sensor) applySensor();
+  else camera.rotation.set(pitch, yaw, 0, 'YXZ');
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

@@ -51,6 +51,7 @@ body.sim .simOnly{display:flex}
     <div class="row"><span class="lab">Source</span><div class="modes"><button id="mVoice">Voice</button><button id="mSim">Simulated pulse</button></div></div>
     <div class="row"><span class="lab">Sound</span><div class="modes"><button id="sOn">On</button><button id="sOff">Off</button></div></div>
     <div class="row"><span class="lab">40+40</span><div class="modes"><button id="fOn">On</button><button id="fOff">Off</button></div></div>
+    <div class="row"><span class="lab">40 Hz sound</span><div class="modes"><button id="shOn">Sharp</button><button id="shOff">Smooth</button></div></div>
     <div class="row"><label for="hz">Tone</label><button class="step" id="hzDn">&minus;</button><input id="hz" type="range" min="40" max="1000" step="1" value="432"><button class="step" id="hzUp">+</button><span class="val" id="hzV"></span></div>
     <div class="row"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="35"><span class="val" id="tvolV"></span></div>
     <div class="row voiceOnly"><span class="lab">Voice echo</span><div class="modes"><button id="eOn">On (headphones)</button><button id="eOff">Off</button></div></div>
@@ -72,7 +73,7 @@ import * as THREE from 'three';
 const N = 50;            // nodes per axis in one repeating block, 1 m apart
 const PITCH = 1.0;
 const SLOTS = 40;        // max simultaneous wave rings
-const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, sound: true, echo: false, toneHz: 432, toneVol: 35, forty: false };
+const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, sound: true, echo: false, toneHz: 432, toneVol: 35, forty: false, fortySharp: true };
 
 // ---- Lattice ----
 const HALF = (N - 1) * PITCH / 2;
@@ -433,12 +434,16 @@ function startAudio() {
   const lfo40 = ctx.createBufferSource(); lfo40.buffer = envBuf; lfo40.loop = true;
   pulseDepth = ctx.createGain(); pulseDepth.gain.value = 0;
   lfo40.connect(pulseDepth); pulseDepth.connect(pulser.gain); lfo40.start();
+  // the smooth alternative: the tone swells up and down 40 times a second
+  const sine40 = ctx.createOscillator(); sine40.type = 'sine'; sine40.frequency.value = 40;
+  smoothDepth = ctx.createGain(); smoothDepth.gain.value = 0;
+  sine40.connect(smoothDepth); smoothDepth.connect(pulser.gain); sine40.start();
   drone.connect(pulser); pulser.connect(master);
 
 }
 const TONE_PARTS = [[1, 0.6], [0.5, 0.25], [0.25, 0.08]];   // pure tones: the chosen pitch, with a little of the octaves below
 const toneOscs = [];
-let droneGain = null, swellGain = null, pulser = null, pulseDepth = null;
+let droneGain = null, swellGain = null, pulser = null, pulseDepth = null, smoothDepth = null;
 function applyTone() {
   if (!audioCtx) return;
   const now = audioCtx.currentTime;
@@ -455,9 +460,12 @@ function setForty(on) {
   $('fOff').classList.toggle('on', !on);
   if (audioCtx) {
     const now = audioCtx.currentTime;
-    // on: silence except for the 40-per-second bursts (a little louder, as they are so short); off: steady tone
-    pulser.gain.setTargetAtTime(on ? 0 : 1, now, 0.05);
-    pulseDepth.gain.setTargetAtTime(on ? 1.5 : 0, now, 0.05);
+    // sharp: silence except for 40 short bursts a second (a little louder, as they are so short)
+    // smooth: the tone swells between silent and full 40 times a second; off: steady tone
+    const sharp = on && cfg.fortySharp, soft = on && !cfg.fortySharp;
+    pulser.gain.setTargetAtTime(sharp ? 0 : soft ? 0.5 : 1, now, 0.05);
+    pulseDepth.gain.setTargetAtTime(sharp ? 1.5 : 0, now, 0.05);
+    smoothDepth.gain.setTargetAtTime(soft ? 0.5 : 0, now, 0.05);
   }
   material.uniforms.uRest.value = on ? 0.8 : 0;
   pulseAmps.fill(0); voiceOn = false;      // clear any waves in flight
@@ -571,6 +579,14 @@ $('mVoice').addEventListener('click', async () => {
 $('sOn').addEventListener('click', () => setSound(true));
 $('sOff').addEventListener('click', () => setSound(false));
 $('fOn').addEventListener('click', () => { if (!cfg.forty) $('warn').style.display = 'flex'; });
+function setSharp(v) {
+  cfg.fortySharp = v;
+  $('shOn').classList.toggle('on', v);
+  $('shOff').classList.toggle('on', !v);
+  if (cfg.forty) setForty(true);       // re-apply with the new sound
+}
+$('shOn').addEventListener('click', () => setSharp(true));
+$('shOff').addEventListener('click', () => setSharp(false));
 $('fOff').addEventListener('click', () => { setForty(false); if (cfg.mode === 'sim') statusEl.textContent = lookMsg; });
 $('warnNo').addEventListener('click', () => { $('warn').style.display = 'none'; });
 $('warnYes').addEventListener('click', () => { $('warn').style.display = 'none'; lightOK = fps > 110 && fps < 130; setForty(true); showPanel(); if (cfg.mode === 'sim') statusEl.textContent = lookMsg + fortyMsg; });
@@ -599,6 +615,7 @@ readControls();
 setSound(true);
 setEcho(false);
 setForty(false);
+setSharp(true);
 
 // A copy left open in another tab must not keep droning: go quiet whenever this page is hidden.
 document.addEventListener('visibilitychange', () => {

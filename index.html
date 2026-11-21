@@ -417,6 +417,13 @@ function buildLattice() {
       varying float vAtt;
       varying float vSize;
       varying vec3 vTint;
+      // n evenly spaced rays reaching out to 'len' (1 = the edge of the light's sprite)
+      float ray(float ang, float r, float n, float len, float size) {
+        float off = abs(fract(ang * n + 0.5) - 0.5) / n * 6.28318;      // angle to the nearest ray
+        float perp = off * r * size * 0.5;                              // sideways distance from it, in pixels
+        float k = clamp(r / len, 0.0, 1.0);
+        return exp(-perp / mix(1.0, 0.18, k)) * pow(1.0 - k, 1.4);
+      }
       void main() {
         if (vGlow < 0.004) discard;
         vec2 c = gl_PointCoord - vec2(0.5);
@@ -424,11 +431,12 @@ function buildLattice() {
         float coreR = max(1.0, 0.07 * vSize) / (0.5 * vSize);
         float core = 1.0 - smoothstep(coreR * 0.9, coreR * 1.1, r);       // hard-edged centre
         float halo = pow(max(0.0, 1.0 - r), 4.0) * 0.3 * vGlow;           // less haze around it
-        // four fine rays: about a pixel wide at the centre, tapering to a point at the tips
-        vec2 px = abs(c) * vSize, t = abs(c) * 2.0;
-        float rayV = exp(-px.x / mix(1.1, 0.2, t.y)) * pow(max(0.0, 1.0 - t.y), 1.4);
-        float rayH = exp(-px.y / mix(1.1, 0.2, t.x)) * pow(max(0.0, 1.0 - t.x), 1.4);
-        float spikes = (rayV + rayH) * 0.95 * smoothstep(0.35, 1.0, vGlow);
+        // a 32-point star: 4 long rays, 4 medium between them, then 8 shorter and 16 shortest,
+        // each about a pixel wide at the centre and tapering to a point at its tip
+        float ang = atan(c.y, c.x) / 6.28318;
+        float spikes = (ray(ang, r, 4.0, 1.0, vSize) + ray(ang, r, 8.0, 0.68, vSize) * 0.8 +
+                        ray(ang, r, 16.0, 0.44, vSize) * 0.65 + ray(ang, r, 32.0, 0.28, vSize) * 0.5)
+                       * 0.8 * smoothstep(0.35, 1.0, vGlow);
         float a = (core + halo + spikes) * vAtt * min(vGlow, 1.0);
         vec3 col = mix(vTint, vec3(1.0), clamp(core + vGlow - 0.6, 0.0, 1.0) * uWhite);   // coloured lights keep their colour
         // a Set can colour the lights (breathing phases, the humming goal); the very centre stays a little white

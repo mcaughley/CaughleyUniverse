@@ -2,163 +2,734 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pulse Lattice</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pulse Lattice VR</title>
 <style>
-html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif}
-#hud{position:fixed;left:12px;top:12px;color:#9fd8ff;font-size:14px;line-height:1.5;pointer-events:none;white-space:pre}
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif;color:#9fd8ff;touch-action:none;-webkit-user-select:none;user-select:none}
+canvas{display:block}
+#start,#warn{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000;z-index:10;text-align:center;padding:24px}
+#warn{display:none;background:rgba(0,0,0,.94);z-index:20}
+#start h1,#warn h1{font-weight:200;letter-spacing:.3em;font-size:20px;margin:0}
+#start p,#warn p{margin:0;max-width:420px;font-size:14px;line-height:1.5;color:#6f9fc4}
+.big{font-size:17px;padding:14px 34px;border-radius:30px;border:1px solid #9fd8ff;background:transparent;color:#9fd8ff}
+#enterVR{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:5;display:none;background:#9fd8ff;color:#001018}
+#panel{position:fixed;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(0,0,0,.55);font-size:13px;display:none}
+.row{display:flex;align-items:center;gap:10px;margin:6px 0}
+.row label,.row .lab{width:96px;text-align:left}
+.row input[type=range]{flex:1}
+.row span.val{width:64px;text-align:right}
+#status{color:#6f9fc4;font-size:12px;margin-top:4px;line-height:1.4}
+.modes{display:flex;flex:1;gap:8px}
+.modes button{flex:1;padding:8px 0;border-radius:18px;border:1px solid #35607f;background:transparent;color:#6f9fc4;font-size:13px}
+.modes button.on{border-color:#9fd8ff;color:#001018;background:#9fd8ff}
+#meter{flex:1;height:8px;border-radius:4px;background:#12202c;overflow:hidden}
+#meterFill{height:100%;width:0;background:#9fd8ff}
+.step{width:32px;height:28px;border-radius:14px;border:1px solid #35607f;background:transparent;color:#9fd8ff;font-size:16px;line-height:1;padding:0}
+.voiceOnly,.simOnly{display:none}
+body.voice .voiceOnly{display:flex}
+body.sim .simOnly{display:flex}
 </style>
 </head>
-<body>
-<div id="hud"></div>
+<body class="sim">
+<div id="start">
+  <h1>PULSE LATTICE VR</h1>
+  <p>A lattice of lights that never ends, dark until your voice wakes it. Choose your headset, then Start. Set things up on the next screen, then press Enter VR.</p>
+  <div class="modes" style="max-width:420px;width:100%">
+    <button data-hs="q2">Quest 2</button><button data-hs="q3" class="on">Quest 3 / 3S</button><button data-hs="qpro">Quest Pro</button><button data-hs="max">Other / PC</button>
+  </div>
+  <p>Allow the microphone when asked: your voice is only used live on this device. Nothing is recorded or sent.</p>
+  <button id="go" class="big">Start</button>
+</div>
+<div id="warn">
+  <h1>40+40</h1>
+  <p>This pulses the lights and the tone 40 times a second. In a headset the flashing fills your whole view.</p>
+  <p>Do not use it if you have epilepsy or are sensitive to flashing light. Stop if you feel unwell.</p>
+  <p>It is an art effect. It is not a medical device or a treatment.</p>
+  <div class="modes" style="max-width:300px;width:100%"><button id="warnNo">Cancel</button><button id="warnYes" class="on">Start</button></div>
+</div>
+<button id="enterVR" class="big">Enter VR</button>
+<div id="panel">
+  <div class="row"><span class="lab">Source</span><div class="modes"><button id="mVoice">Voice</button><button id="mSim">Simulated pulse</button></div></div>
+  <div class="row"><span class="lab">Sound</span><div class="modes"><button id="sOn">On</button><button id="sOff">Off</button></div></div>
+  <div class="row"><span class="lab">40+40</span><div class="modes"><button id="fOn">On</button><button id="fOff">Off</button></div></div>
+  <div class="row"><span class="lab">40 Hz sound</span><div class="modes"><button id="shOn">Sharp</button><button id="shOff">Smooth</button></div></div>
+  <div class="row"><label for="hz">Tone</label><button class="step" id="hzDn">&minus;</button><input id="hz" type="range" min="40" max="1000" step="1" value="432"><button class="step" id="hzUp">+</button><span class="val" id="hzV"></span></div>
+  <div class="row"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="35"><span class="val" id="tvolV"></span></div>
+  <div class="row voiceOnly"><span class="lab">Voice echo</span><div class="modes"><button id="eOn">On (headphones)</button><button id="eOff">Off</button></div></div>
+  <div class="row voiceOnly"><span class="lab">Voice level</span><div id="meter"><div id="meterFill"></div></div><span class="val" id="lvlV"></span></div>
+  <div class="row voiceOnly"><label for="sens">Sensitivity</label><input id="sens" type="range" min="1" max="10" step="1" value="6"><span class="val" id="sensV"></span></div>
+  <div class="row simOnly"><label for="bpm">Pulse</label><input id="bpm" type="range" min="30" max="140" step="1" value="60"><span class="val" id="bpmV"></span></div>
+  <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="1"><span class="val" id="driftV"></span></div>
+  <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="30" step="0.5" value="6"><span class="val" id="spdV"></span></div>
+  <div id="status"></div>
+</div>
 <script type="importmap">
-{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}
 </script>
 <script type="module">
 import * as THREE from 'three';
-import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 // ---- Settings ----
-const N = 50;            // nodes per axis: 50 m cube at 1 m pitch
-const PITCH = 1.0;       // metres between lights
-const SLOTS = 16;        // max simultaneous pulse rings
-const EYE_HEIGHT = 1.6;  // metres from floor to head
+// Lights per side of the repeating block, and how many waves can be alive at once, per headset.
+const HEADSETS = {
+  q2:   { n: 32, slots: 24, label: 'Quest 2' },
+  q3:   { n: 40, slots: 32, label: 'Quest 3 / 3S' },
+  qpro: { n: 36, slots: 28, label: 'Quest Pro' },
+  max:  { n: 50, slots: 40, label: 'Other / PC' }
+};
+let headset = 'q3';
+const PITCH = 1.0;
+const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0,
+              sound: true, echo: false, toneHz: 432, toneVol: 35, forty: false, fortySharp: true };
+const $ = id => document.getElementById(id);
 
-const cfg = { bpm: 60, speed: 3.0, width: 0.6, tail: 3.0 };
-
-// ---- Lattice positions (centred on the viewer) ----
-const HALF = (N - 1) * PITCH / 2;
-const count = N * N * N;
-const positions = new Float32Array(count * 3);
-let p = 0;
-for (let i = 0; i < N; i++)
-  for (let j = 0; j < N; j++)
-    for (let k = 0; k < N; k++) {
-      positions[p++] = i * PITCH - HALF;
-      positions[p++] = j * PITCH - HALF;
-      positions[p++] = k * PITCH - HALF;
-    }
-const geometry = new THREE.BufferGeometry();
-geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-// ---- Pulse timing ----
-const pulseTimes = new Float32Array(SLOTS).fill(-1e6);
-let slot = 0;
-let nextBeat = 0;
-
-// ---- Shader: each light brightens as a wavefront passes it ----
-const material = new THREE.ShaderMaterial({
-  uniforms: {
-    uTime: { value: 0 },
-    uPulseT: { value: pulseTimes },
-    uSpeed: { value: cfg.speed },
-    uWidth: { value: cfg.width },
-    uTail: { value: cfg.tail },
-    uScale: { value: 30 }
-  },
-  vertexShader: `
-    uniform float uTime;
-    uniform float uPulseT[${SLOTS}];
-    uniform float uSpeed;
-    uniform float uWidth;
-    uniform float uTail;
-    uniform float uScale;
-    varying float vGlow;
-    void main() {
-      float d = length(position);   // distance from the viewer
-      float g = 0.0;
-      for (int i = 0; i < ${SLOTS}; i++) {
-        float age = uTime - uPulseT[i];
-        if (age < 0.0) continue;
-        float r = age * uSpeed;      // wavefront radius
-        float ahead = (d - r) / uWidth;
-        float front = exp(-ahead * ahead);
-        float trail = (d < r) ? exp(-(r - d) / uTail) : 0.0;
-        g += (front + 0.5 * trail) * exp(-age * 0.25);
-      }
-      vGlow = clamp(g, 0.0, 1.0);
-      vec4 mv = modelViewMatrix * vec4(position, 1.0);
-      gl_Position = projectionMatrix * mv;
-      gl_PointSize = min(40.0, (1.5 + 5.0 * vGlow) * uScale / max(0.1, -mv.z));
-    }
-  `,
-  fragmentShader: `
-    varying float vGlow;
-    void main() {
-      vec2 c = gl_PointCoord - vec2(0.5);
-      float a = smoothstep(0.5, 0.0, length(c));
-      vec3 base = vec3(0.10, 0.18, 0.32);
-      vec3 hot = vec3(0.65, 0.95, 1.0);
-      gl_FragColor = vec4(mix(base, hot, vGlow), a * (0.25 + 0.75 * vGlow));
-    }
-  `,
-  transparent: true,
-  depthWrite: false,
-  blending: THREE.AdditiveBlending
-});
-const points = new THREE.Points(geometry, material);
-
-// ---- Scene and viewer ----
-const scene = new THREE.Scene();
-scene.add(points);
-const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 200);
-const dolly = new THREE.Group();   // lowered in VR so your head sits at the lattice centre
-dolly.add(camera);
-scene.add(dolly);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+// ---- Renderer and scene ----
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // colours are written exactly as the shaders give them
 renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType('local-floor');
+try { renderer.xr.setFoveation(1); } catch (err) {}
 document.body.appendChild(renderer.domElement);
-document.body.appendChild(VRButton.createButton(renderer));
-
-renderer.xr.addEventListener('sessionstart', () => { dolly.position.y = -EYE_HEIGHT; });
-renderer.xr.addEventListener('sessionend', () => { dolly.position.y = 0; });
-
-// ---- Desktop test controls: drag to look, arrow keys to tune ----
-let yaw = 0, pitch = 0, dragging = false, lx = 0, ly = 0;
-renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; });
-addEventListener('pointerup', () => { dragging = false; });
-addEventListener('pointermove', e => {
-  if (!dragging || renderer.xr.isPresenting) return;
-  yaw -= (e.clientX - lx) * 0.004;
-  pitch = Math.max(-1.5, Math.min(1.5, pitch - (e.clientY - ly) * 0.004));
-  lx = e.clientX; ly = e.clientY;
-  camera.rotation.set(pitch, yaw, 0, 'YXZ');
-});
-addEventListener('keydown', e => {
-  if (e.key === 'ArrowUp') cfg.bpm += 5;
-  if (e.key === 'ArrowDown') cfg.bpm = Math.max(20, cfg.bpm - 5);
-  if (e.key === 'ArrowRight') cfg.speed += 0.5;
-  if (e.key === 'ArrowLeft') cfg.speed = Math.max(0.5, cfg.speed - 0.5);
-});
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 400);
+const world = new THREE.Group();     // kept centred on your head, so real steps move you through the lattice
+scene.add(world);
 addEventListener('resize', () => {
+  if (renderer.xr.isPresenting) return;
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 
-// ---- Animation loop ----
-const clock = new THREE.Clock();
-const hud = document.getElementById('hud');
-let hudTimer = -1;
-renderer.setAnimationLoop(() => {
-  const t = clock.getElapsedTime();
-  const interval = 60 / cfg.bpm;
-  while (t >= nextBeat) {          // each beat starts a new ring at the viewer
-    pulseTimes[slot] = nextBeat;
-    slot = (slot + 1) % SLOTS;
-    nextBeat += interval;
+// ---- Deep background, drawn once into a surrounding texture (cheap for a headset) ----
+{
+  const skyMat = new THREE.ShaderMaterial({
+    vertexShader: `
+      varying vec3 vDir;
+      void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+    `,
+    fragmentShader: `
+      varying vec3 vDir;
+      float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float noise(vec3 x) {
+        vec3 i = floor(x), f = fract(x);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+      }
+      float fbm(vec3 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + 11.7; a *= 0.5; } return v; }
+      void main() {
+        vec3 d = normalize(vDir);
+        float n1 = fbm(d * 1.6), n2 = fbm(d * 2.7 + vec3(40.0, 17.0, 0.0));
+        vec3 col = vec3(0.004, 0.006, 0.014);
+        col += vec3(0.020, 0.040, 0.100) * pow(n1, 2.2) * 1.6;
+        col += vec3(0.070, 0.020, 0.080) * pow(n2, 3.5) * 1.8;
+        col += (hash(vec3(gl_FragCoord.xy, 1.0)) - 0.5) / 255.0;
+        gl_FragColor = vec4(max(col, 0.0), 1.0);
+      }
+    `,
+    side: THREE.BackSide, depthWrite: false, depthTest: false
+  });
+  const skyScene = new THREE.Scene();
+  skyScene.add(new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), skyMat));
+  const rt = new THREE.WebGLCubeRenderTarget(1024);
+  new THREE.CubeCamera(1, 300, rt).update(renderer, skyScene);
+  scene.background = rt.texture;
+}
+
+// ---- Far stars ----
+const STARS = 2600;
+const starMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 }, uDpr: { value: 2 } },
+  vertexShader: `
+    attribute float aSize; attribute float aSeed;
+    uniform float uTime; uniform float uDpr;
+    varying float vB; varying float vSeed;
+    void main() {
+      vSeed = aSeed;
+      vB = (0.25 + 0.35 * aSeed) * (0.8 + 0.2 * sin(uTime * (0.4 + aSeed) + aSeed * 40.0)) * min(1.0, aSize);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = max(1.0, aSize * uDpr);
+    }
+  `,
+  fragmentShader: `
+    varying float vB; varying float vSeed;
+    void main() {
+      float r = length(gl_PointCoord - vec2(0.5)) * 2.0;
+      vec3 col = mix(vec3(0.70, 0.80, 1.0), vec3(1.0, 0.88, 0.75), vSeed * vSeed);
+      gl_FragColor = vec4(col, (1.0 - smoothstep(0.3, 1.0, r)) * vB);
+    }
+  `,
+  transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
+});
+{
+  const sPos = new Float32Array(STARS * 3), sSize = new Float32Array(STARS), sSeed = new Float32Array(STARS);
+  for (let i = 0; i < STARS; i++) {
+    const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u);
+    sPos[i * 3] = 140 * s * Math.cos(th); sPos[i * 3 + 1] = 140 * u; sPos[i * 3 + 2] = 140 * s * Math.sin(th);
+    sSize[i] = 0.7 + Math.pow(Math.random(), 6) * 2.2;
+    sSeed[i] = Math.random();
   }
-  material.uniforms.uTime.value = t;
-  material.uniforms.uSpeed.value = cfg.speed;
-  renderer.render(scene, camera);
-  if (t - hudTimer > 0.5) {
-    hudTimer = t;
-    hud.textContent = `Simulated pulse: ${cfg.bpm} BPM\nWave speed: ${cfg.speed.toFixed(1)} m/s\n${count.toLocaleString()} lights`;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+  g.setAttribute('aSize', new THREE.BufferAttribute(sSize, 1));
+  g.setAttribute('aSeed', new THREE.BufferAttribute(sSeed, 1));
+  const stars = new THREE.Points(g, starMat);
+  stars.frustumCulled = false; stars.renderOrder = 1;
+  world.add(stars);
+}
+
+// ---- Lattice (built when you press Start, sized for the headset you chose) ----
+let N = 40, SLOTS = 32, SIZE = 40;
+let material = null, pulseTimes, pulseAmps, pulseWorld, pulseRel, pulseDir;
+const cam = { x: 0, y: 0, z: 0 };                 // how far you have travelled through the lattice
+const head = new THREE.Vector3();                  // where your head really is in the room
+const camUniform = new THREE.Vector3();
+const hands = [new THREE.Vector3(0, -99, 0), new THREE.Vector3(0, -99, 0)];   // relative to your head
+let slot = 0;
+const wrap = v => ((v % SIZE) + SIZE) % SIZE;
+
+function buildLattice() {
+  N = HEADSETS[headset].n; SLOTS = HEADSETS[headset].slots; SIZE = N * PITCH;
+  const HALF = (N - 1) * PITCH / 2, count = N * N * N;
+  const positions = new Float32Array(count * 3);
+  let p = 0;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) for (let k = 0; k < N; k++) {
+    positions[p++] = i * PITCH - HALF; positions[p++] = j * PITCH - HALF; positions[p++] = k * PITCH - HALF;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  pulseTimes = new Float32Array(SLOTS).fill(-1e6);
+  pulseAmps = new Float32Array(SLOTS).fill(0);
+  pulseWorld = new Float64Array(SLOTS * 3);
+  pulseRel = new Float32Array(SLOTS * 3);
+  pulseDir = new Float32Array(SLOTS * 4);          // xyz: direction a touch wave runs in, w: 1 for touch waves
+  material = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 }, uPulseT: { value: pulseTimes }, uPulseA: { value: pulseAmps },
+      uPulseO: { value: pulseRel }, uPulseD: { value: pulseDir }, uCam: { value: camUniform },
+      uHand: { value: hands }, uHalf: { value: SIZE / 2 },
+      uSpeed: { value: cfg.speed }, uWidth: { value: cfg.width }, uEmber: { value: cfg.ember },
+      uLevel: { value: 0 }, uRest: { value: 0 }, uFlick: { value: 1 }, uPx: { value: 20 }
+    },
+    vertexShader: `
+      uniform float uTime;
+      uniform float uPulseT[${SLOTS}];
+      uniform float uPulseA[${SLOTS}];
+      uniform vec3 uPulseO[${SLOTS}];
+      uniform vec4 uPulseD[${SLOTS}];
+      uniform vec3 uCam;
+      uniform vec3 uHand[2];
+      uniform float uHalf;
+      uniform float uSpeed;
+      uniform float uWidth;
+      uniform float uEmber;
+      uniform float uLevel;
+      uniform float uRest;
+      uniform float uFlick;
+      uniform float uPx;
+      varying float vGlow;
+      varying float vAtt;
+      varying float vSize;
+      varying vec3 vTint;
+      void main() {
+        // the lattice wraps around you, so there is always more of it in every direction
+        vec3 rel = mod(position - uCam + uHalf, 2.0 * uHalf) - uHalf;
+        float d = length(rel);
+        float g = 0.0;
+        for (int i = 0; i < ${SLOTS}; i++) {
+          float amp = uPulseA[i];
+          float age = uTime - uPulseT[i];
+          if (amp > 0.0 && age >= 0.0) {
+            vec3 from = rel - uPulseO[i];
+            float r = age * uSpeed;
+            float dp = length(from);
+            float ahead = (dp - r) / uWidth;
+            float front = exp(-ahead * ahead);
+            float ember = (dp < r) ? exp(-(r - dp) / (uSpeed * uEmber)) : 0.0;
+            // a touch wave starts as a sphere, then narrows into a front running the way you drift
+            vec4 dir = uPulseD[i];
+            if (dir.w > 0.5) {
+              float c = dot(from / max(dp, 0.001), dir.xyz);
+              amp *= mix(1.0, pow(max(c, 0.0), 6.0), smoothstep(0.15, 2.2, age));
+            }
+            g += amp * max(front, 0.55 * ember) * exp(-age * 0.2);
+          }
+        }
+        g += 0.3 * uLevel * exp(-d / 5.0);
+        // lights near your hands glow softly, so you can find one to touch
+        vec3 h0 = rel - uHand[0], h1 = rel - uHand[1];
+        g += 0.5 * (exp(-dot(h0, h0) / 0.45) + exp(-dot(h1, h1) / 0.45));
+        g = (g + uRest) * uFlick;
+        vGlow = clamp(g, 0.0, 1.4);
+        vAtt = (1.0 - smoothstep(uHalf * 0.6, uHalf * 0.98, d)) / (1.0 + d * d / 260.0);
+        float h = fract(sin(dot(position, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+        vTint = mix(vec3(0.72, 0.85, 1.0), vec3(1.0, 0.92, 0.80), h * h * h);
+        vec4 mv = modelViewMatrix * vec4(rel, 1.0);
+        gl_Position = projectionMatrix * mv;
+        vSize = clamp((2.0 + 7.0 * vGlow * vGlow) * uPx * projectionMatrix[1][1] / max(0.1, -mv.z), 2.0, 110.0);
+        gl_PointSize = vGlow < 0.004 ? 0.0 : vSize;
+      }
+    `,
+    fragmentShader: `
+      varying float vGlow;
+      varying float vAtt;
+      varying float vSize;
+      varying vec3 vTint;
+      void main() {
+        if (vGlow < 0.004) discard;
+        vec2 c = gl_PointCoord - vec2(0.5);
+        float r = length(c) * 2.0;
+        float coreR = max(1.0, 0.07 * vSize) / (0.5 * vSize);
+        float core = 1.0 - smoothstep(coreR * 0.8, coreR * 1.25, r);
+        float halo = pow(max(0.0, 1.0 - r), 3.0) * 0.5 * vGlow;
+        float spikes = (exp(-abs(c.x) * 70.0) * exp(-abs(c.y) * 7.0) +
+                        exp(-abs(c.y) * 70.0) * exp(-abs(c.x) * 7.0)) * 0.6 * smoothstep(0.55, 1.2, vGlow);
+        float a = (core + halo + spikes) * vAtt * min(vGlow, 1.0);
+        vec3 col = mix(vTint, vec3(1.0), clamp(core + vGlow - 0.6, 0.0, 1.0));
+        gl_FragColor = vec4(col, a);
+      }
+    `,
+    transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
+  });
+  const cloud = new THREE.Points(geometry, material);
+  cloud.frustumCulled = false; cloud.renderOrder = 2;
+  world.add(cloud);
+}
+
+// A wave. Voice and pulse waves start where your head is; touch waves start at the light you touched.
+function emit(time, amp, ox, oy, oz, dx, dy, dz) {
+  if (!material) return;
+  pulseTimes[slot] = time; pulseAmps[slot] = amp;
+  const touch = dx !== undefined;
+  pulseWorld[slot * 3] = touch ? ox : cam.x + head.x;
+  pulseWorld[slot * 3 + 1] = touch ? oy : cam.y + head.y;
+  pulseWorld[slot * 3 + 2] = touch ? oz : cam.z + head.z;
+  pulseDir[slot * 4] = touch ? dx : 0; pulseDir[slot * 4 + 1] = touch ? dy : 0;
+  pulseDir[slot * 4 + 2] = touch ? dz : 0; pulseDir[slot * 4 + 3] = touch ? 1 : 0;
+  slot = (slot + 1) % SLOTS;
+}
+
+// ---- Sound ----
+let audioCtx = null, master = null, micIn = null, echoGate = null, analyser = null, buf = null, verbIn = null;
+let micError = '';
+const TONE_PARTS = [[1, 0.6], [0.5, 0.25], [0.25, 0.08]];   // the chosen pitch, with a little of the octaves below
+const toneOscs = [];
+let droneGain = null, swellGain = null, pulser = null, pulseDepth = null, smoothDepth = null;
+function startAudio() {
+  if (audioCtx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  audioCtx = new AC();
+  const ctx = audioCtx, sr = ctx.sampleRate;
+  master = ctx.createGain();
+  master.gain.value = cfg.sound ? 1 : 0;
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -3; limiter.knee.value = 3; limiter.ratio.value = 12; limiter.attack.value = 0.005; limiter.release.value = 0.3;
+  master.connect(limiter); limiter.connect(ctx.destination);
+
+  // a huge-room echo, generated here (no audio files); used by the touch chime and the optional voice echo
+  const len = Math.floor(sr * 6), ir = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const dta = ir.getChannelData(ch);
+    let lp = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / len, white = Math.random() * 2 - 1;
+      lp += (white - lp) * (0.5 - 0.42 * t);
+      dta[i] = lp * Math.pow(1 - t, 3.2);
+    }
+  }
+  const verb = ctx.createConvolver(); verb.buffer = ir;
+  const verbOut = ctx.createGain(); verbOut.gain.value = 0.55;
+  verb.connect(verbOut); verbOut.connect(master);
+  verbIn = verb;
+
+  micIn = ctx.createGain();
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 160;
+  const pre = ctx.createDelay(1.0); pre.delayTime.value = 0.32;
+  echoGate = ctx.createGain(); echoGate.gain.value = 0;
+  micIn.connect(hp); hp.connect(pre); pre.connect(echoGate); echoGate.connect(verb);
+
+  const drone = ctx.createGain();
+  droneGain = drone;
+  drone.gain.value = cfg.toneVol / 100 * 0.55;
+  TONE_PARTS.forEach(([mult, g]) => {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = cfg.toneHz * mult;
+    const og = ctx.createGain(); og.gain.value = g;
+    o.connect(og); og.connect(drone); o.start();
+    toneOscs.push([o, mult]);
+  });
+  const swell = ctx.createOscillator(); swell.frequency.value = 0.045;
+  const swellAmt = ctx.createGain(); swellAmt.gain.value = drone.gain.value * 0.2;
+  swellGain = swellAmt;
+  swell.connect(swellAmt); swellAmt.connect(drone.gain); swell.start();
+
+  // 40+40 sound. Sharp: a 5 ms burst of the tone every 25 ms. Smooth: the tone swells 40 times a second.
+  pulser = ctx.createGain(); pulser.gain.value = 1;
+  const cyc = sr / 40, envBuf = ctx.createBuffer(1, Math.round(cyc * 2), sr), env = envBuf.getChannelData(0);
+  for (let i = 0; i < env.length; i++) {
+    const ms = ((i % cyc) / sr) * 1000;
+    env[i] = ms < 1 ? 0.5 - 0.5 * Math.cos(Math.PI * ms) : ms < 4 ? 1 : ms < 5 ? 0.5 + 0.5 * Math.cos(Math.PI * (ms - 4)) : 0;
+  }
+  const lfo40 = ctx.createBufferSource(); lfo40.buffer = envBuf; lfo40.loop = true;
+  pulseDepth = ctx.createGain(); pulseDepth.gain.value = 0;
+  lfo40.connect(pulseDepth); pulseDepth.connect(pulser.gain); lfo40.start();
+  const sine40 = ctx.createOscillator(); sine40.type = 'sine'; sine40.frequency.value = 40;
+  smoothDepth = ctx.createGain(); smoothDepth.gain.value = 0;
+  sine40.connect(smoothDepth); smoothDepth.connect(pulser.gain); sine40.start();
+  drone.connect(pulser); pulser.connect(master);
+}
+function applyTone() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  toneOscs.forEach(([o, mult]) => o.frequency.setTargetAtTime(cfg.toneHz * mult, now, 0.08));
+  const g = cfg.toneVol / 100 * 0.55;
+  droneGain.gain.setTargetAtTime(g, now, 0.1);
+  swellGain.gain.setTargetAtTime(g * 0.2, now, 0.1);
+}
+// The gentle sound a light makes when touched: a soft bell, pitched from the tone you chose.
+const CHIME_STEPS = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3, 2];
+let micMuteUntil = 0;
+function chime(seed) {
+  if (!audioCtx || !cfg.sound) return;
+  const ctx = audioCtx, now = ctx.currentTime;
+  let base = cfg.toneHz;
+  while (base < 300) base *= 2;
+  while (base > 700) base /= 2;
+  const f = base * CHIME_STEPS[Math.abs(seed) % CHIME_STEPS.length];
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(0.16, now + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0005, now + 2.2);
+  [[1, 1], [2.01, 0.25], [3.02, 0.08]].forEach(([m, a]) => {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f * m;
+    const og = ctx.createGain(); og.gain.value = a;
+    o.connect(og); og.connect(g); o.start(now); o.stop(now + 2.4);
+  });
+  g.connect(master);
+  const send = ctx.createGain(); send.gain.value = 0.5;
+  g.connect(send); send.connect(verbIn);
+  micMuteUntil = performance.now() + 900;      // so the chime is not heard back as "voice"
+}
+function setSound(on) {
+  cfg.sound = on;
+  $('sOn').classList.toggle('on', on); $('sOff').classList.toggle('on', !on);
+  if (master) master.gain.setTargetAtTime(on ? 1 : 0, audioCtx.currentTime, 0.3);
+}
+function setEcho(on) {
+  cfg.echo = on;
+  $('eOn').classList.toggle('on', on); $('eOff').classList.toggle('on', !on);
+  if (echoGate) echoGate.gain.setTargetAtTime(on ? 1 : 0, audioCtx.currentTime, 0.2);
+}
+async function startMic() {
+  if (analyser) return true;
+  try {
+    startAudio();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false }
+    });
+    const src = audioCtx.createMediaStreamSource(stream);
+    const an = audioCtx.createAnalyser();
+    an.fftSize = 1024; an.smoothingTimeConstant = 0;
+    src.connect(an); src.connect(micIn);
+    buf = new Float32Array(an.fftSize);
+    analyser = an;
+    return true;
+  } catch (err) {
+    micError = (err && err.name) ? err.name : 'error';
+    analyser = null;
+    return false;
+  }
+}
+
+// ---- 40+40 ----
+let fps = 72, lightOK = false, voiceOn = false, fortyAccepted = false, fortyMsg = '';
+function setForty(on) {
+  cfg.forty = on;
+  $('fOn').classList.toggle('on', on); $('fOff').classList.toggle('on', !on);
+  if (audioCtx) {
+    const now = audioCtx.currentTime;
+    const sharp = on && cfg.fortySharp, soft = on && !cfg.fortySharp;
+    pulser.gain.setTargetAtTime(sharp ? 0 : soft ? 0.5 : 1, now, 0.05);
+    pulseDepth.gain.setTargetAtTime(sharp ? 1.5 : 0, now, 0.05);
+    smoothDepth.gain.setTargetAtTime(soft ? 0.5 : 0, now, 0.05);
+  }
+  if (material) {
+    material.uniforms.uRest.value = on ? 0.8 : 0;
+    if (!on) material.uniforms.uFlick.value = 1;
+    pulseAmps.fill(0);
+  }
+  voiceOn = false;
+  fortyMsg = !on ? '' : ' 40+40 on. The light pulse needs the display at 120 Hz; it is checked again inside VR.';
+}
+function setSharp(v) {
+  cfg.fortySharp = v;
+  $('shOn').classList.toggle('on', v); $('shOff').classList.toggle('on', !v);
+  if (cfg.forty) setForty(true);
+}
+
+// ---- Voice level ----
+let floorDb = -60, inDb = -120, silentFor = 0, level = 0, smooth = 0;
+const mins = new Array(15).fill(null);
+let minSec = -1, secMax = 0;
+function levelFrom(db, floor, sens) {
+  return Math.max(0, Math.min(1, (db - floor - (26 - 2 * sens)) / 28));
+}
+function readMic() {
+  if (!analyser) { level = 0; return; }
+  analyser.getFloatTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  const db = 20 * Math.log10(Math.max(Math.sqrt(sum / buf.length), 1e-6));
+  inDb = db;
+  const sec = Math.floor(performance.now() / 1000);
+  if (sec !== minSec) { minSec = sec; mins[sec % 15] = db; silentFor = secMax <= -119 ? silentFor + 1 : 0; secMax = db; }
+  else { if (db < mins[sec % 15]) mins[sec % 15] = db; if (db > secMax) secMax = db; }
+  let lo = Infinity;
+  for (let i = 0; i < 15; i++) if (mins[i] !== null && mins[i] < lo) lo = mins[i];
+  floorDb = Math.max(lo, -90);
+  level = performance.now() < micMuteUntil ? 0 : levelFrom(db, floorDb, cfg.sens);
+}
+let nextBeat = 0, lastVoiceEmit = -1e6;
+function driveSim(t) {
+  const interval = 60 / cfg.bpm;
+  if (nextBeat < t - interval) nextBeat = t;
+  while (t >= nextBeat) { emit(nextBeat, 1); nextBeat += interval; }
+}
+function driveVoice(t) {
+  readMic();
+  smooth += (level - smooth) * 0.25;
+  if (!voiceOn && level > 0.08) { voiceOn = true; lastVoiceEmit = -1e6; }
+  if (voiceOn && level < 0.04) voiceOn = false;
+  const gap = Math.max(0.04, Math.min(0.5, cfg.width * 1.2 / cfg.speed));
+  if (voiceOn && t - lastVoiceEmit >= gap) { emit(t, Math.max(0.15, level)); lastVoiceEmit = t; }
+}
+
+// ---- Touching a light ----
+const drift = new THREE.Vector3(0, 0, -1);        // the way you are travelling
+const lastTouch = ['', ''];
+function touchAt(ax, ay, az, t) {
+  // lights sit at half-metre marks: ..., -0.5, 0.5, 1.5, ...
+  const nx = Math.floor(ax) + 0.5, ny = Math.floor(ay) + 0.5, nz = Math.floor(az) + 0.5;
+  emit(t, 1, nx, ny, nz, drift.x, drift.y, drift.z);
+  chime(Math.round(nx * 7 + ny * 13 + nz * 29));
+  return nx + ',' + ny + ',' + nz;
+}
+function checkTouch(i, hx, hy, hz, pressed, t) {
+  // hx,hy,hz: hand position in the room. Its place in the lattice adds how far you have travelled.
+  const ax = cam.x + hx, ay = cam.y + hy, az = cam.z + hz;
+  const nx = Math.floor(ax) + 0.5, ny = Math.floor(ay) + 0.5, nz = Math.floor(az) + 0.5;
+  const key = nx + ',' + ny + ',' + nz;
+  const d2 = (ax - nx) ** 2 + (ay - ny) ** 2 + (az - nz) ** 2;
+  if ((d2 < 0.05 || pressed) && key !== lastTouch[i]) { lastTouch[i] = key; touchAt(ax, ay, az, t); }
+  else if (d2 > 0.12 && !pressed) lastTouch[i] = '';
+}
+
+// ---- Preview controls (before you enter VR): drag to look ----
+let yaw = 0, pitch = 0, dragging = false, lx = 0, ly = 0;
+renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; });
+addEventListener('pointerup', () => { dragging = false; });
+addEventListener('pointermove', e => {
+  if (!dragging) return;
+  yaw += (e.clientX - lx) * 0.005;
+  pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - ly) * 0.005));
+  lx = e.clientX; ly = e.clientY;
+});
+
+// ---- Panel ----
+const statusEl = $('status');
+let baseMsg = '';
+function setMode(m) {
+  cfg.mode = m;
+  document.body.className = m;
+  $('mVoice').classList.toggle('on', m === 'voice'); $('mSim').classList.toggle('on', m === 'sim');
+  if (pulseAmps) pulseAmps.fill(0);
+  voiceOn = false; smooth = 0; level = 0;
+}
+$('mSim').addEventListener('click', () => setMode('sim'));
+$('mVoice').addEventListener('click', async () => {
+  if (await startMic()) setMode('voice');
+  else statusEl.textContent = 'Microphone not available (' + micError + '). Allow it for this site, then tap Voice again.';
+});
+$('sOn').addEventListener('click', () => setSound(true));
+$('sOff').addEventListener('click', () => setSound(false));
+$('eOn').addEventListener('click', () => setEcho(true));
+$('eOff').addEventListener('click', () => setEcho(false));
+$('shOn').addEventListener('click', () => setSharp(true));
+$('shOff').addEventListener('click', () => setSharp(false));
+$('fOn').addEventListener('click', () => { if (!cfg.forty) $('warn').style.display = 'flex'; });
+$('fOff').addEventListener('click', () => setForty(false));
+$('warnNo').addEventListener('click', () => { $('warn').style.display = 'none'; });
+$('warnYes').addEventListener('click', () => { $('warn').style.display = 'none'; fortyAccepted = true; setForty(true); });
+function readControls() {
+  cfg.bpm = Number($('bpm').value); cfg.speed = Number($('spd').value);
+  cfg.sens = Number($('sens').value); cfg.drift = Number($('drift').value);
+  cfg.toneHz = Number($('hz').value); cfg.toneVol = Number($('tvol').value);
+  $('bpmV').textContent = cfg.bpm + ' BPM';
+  $('spdV').textContent = cfg.speed.toFixed(1) + ' m/s';
+  $('sensV').textContent = cfg.sens + ' / 10';
+  $('driftV').textContent = cfg.drift.toFixed(1) + ' m/s';
+  $('hzV').textContent = cfg.toneHz + ' Hz';
+  $('tvolV').textContent = cfg.toneVol + '%';
+  applyTone();
+}
+['bpm', 'spd', 'sens', 'drift', 'hz', 'tvol'].forEach(id => $(id).addEventListener('input', readControls));
+function nudgeHz(by) { const el = $('hz'); el.value = Math.max(40, Math.min(1000, Number(el.value) + by)); readControls(); }
+$('hzDn').addEventListener('click', () => nudgeHz(-1));
+$('hzUp').addEventListener('click', () => nudgeHz(1));
+readControls(); setSound(true); setEcho(false); setForty(false); setSharp(true);
+
+document.querySelectorAll('[data-hs]').forEach(b => b.addEventListener('click', () => {
+  headset = b.dataset.hs;
+  document.querySelectorAll('[data-hs]').forEach(o => o.classList.toggle('on', o === b));
+}));
+
+document.addEventListener('visibilitychange', () => {
+  if (!audioCtx || renderer.xr.isPresenting) return;
+  if (document.hidden) audioCtx.suspend(); else audioCtx.resume();
+});
+
+// ---- Start, and entering VR ----
+let started = false, vrSupported = false;
+$('go').addEventListener('click', async () => {
+  startAudio();
+  buildLattice();
+  const mic = await startMic();
+  if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch (err) {} }
+  setMode(mic ? 'voice' : 'sim');
+  try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
+  $('start').style.display = 'none';
+  $('panel').style.display = 'block';
+  $('enterVR').style.display = vrSupported ? 'block' : 'none';
+  baseMsg = HEADSETS[headset].label + ': ' + (N * N * N).toLocaleString() + ' lights per block. ' +
+    (vrSupported
+      ? 'Set things up here, then press Enter VR. In VR: right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. A button turns 40+40 on and off once you have accepted its warning here.'
+      : 'This browser has no VR, so this is a preview: drag to look. Open this page in the Quest browser for VR.') +
+    (mic ? '' : ' Microphone not available (' + micError + '): using simulated pulse.');
+  statusEl.textContent = baseMsg;
+  started = true;
+});
+$('enterVR').addEventListener('click', async () => {
+  try {
+    const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'hand-tracking'] });
+    await renderer.xr.setSession(session);
+    // 40 Hz light needs 120 frames a second: ask for it where the headset offers it
+    try {
+      if (session.supportedFrameRates && Array.from(session.supportedFrameRates).includes(120)) await session.updateTargetFrameRate(120);
+    } catch (err) {}
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    session.addEventListener('end', () => { hands[0].set(0, -99, 0); hands[1].set(0, -99, 0); });
+  } catch (err) {
+    statusEl.textContent = 'Could not start VR (' + ((err && err.name) || 'error') + ').';
   }
 });
+
+// ---- Animation loop ----
+const clock = new THREE.Clock();
+const fwd = new THREE.Vector3(), quat = new THREE.Quaternion(), tmp = new THREE.Vector3();
+let lastT = 0, lastFrame = 0, uiTimer = 0, boostAxis = 0, aWas = false;
+renderer.setAnimationLoop((ms, frame) => {
+  const t = clock.getElapsedTime();
+  const dt = Math.min(0.1, t - lastT); lastT = t;
+  if (lastFrame) { const f = 1000 / Math.max(1, ms - lastFrame); fps += (f - fps) * 0.05; }
+  lastFrame = ms;
+  if (!started) { renderer.render(scene, camera); return; }
+  const inVR = renderer.xr.isPresenting && frame;
+
+  // where your head is and which way you face
+  let stick = 0, aNow = false;
+  if (inVR) {
+    const ref = renderer.xr.getReferenceSpace();
+    const pose = frame.getViewerPose(ref);
+    if (pose) {
+      const p = pose.transform.position, o = pose.transform.orientation;
+      head.set(p.x, p.y, p.z);
+      quat.set(o.x, o.y, o.z, o.w);
+      fwd.set(0, 0, -1).applyQuaternion(quat);
+    }
+    let hi = 0;
+    for (const src of frame.session.inputSources) {
+      let hp = null, pressed = false;
+      if (src.hand && frame.getJointPose) {
+        const tip = src.hand.get('index-finger-tip');
+        const jp = tip ? frame.getJointPose(tip, ref) : null;
+        if (jp) hp = jp.transform.position;
+      } else if (src.gripSpace) {
+        const gp = frame.getPose(src.gripSpace, ref);
+        if (gp) hp = gp.transform.position;
+      }
+      const gpad = src.gamepad;
+      if (gpad) {
+        pressed = !!(gpad.buttons[0] && gpad.buttons[0].pressed);
+        if (src.handedness === 'right' || stick === 0) { if (gpad.axes.length >= 4 && Math.abs(gpad.axes[3]) > 0.15) stick = -gpad.axes[3]; }
+        if (src.handedness === 'right' && gpad.buttons[4] && gpad.buttons[4].pressed) aNow = true;
+      }
+      if (hp && hi < 2) {
+        hands[hi].set(hp.x - head.x, hp.y - head.y, hp.z - head.z);
+        if (!cfg.forty) checkTouch(hi, hp.x, hp.y, hp.z, pressed, t);
+        hi++;
+      }
+    }
+    for (; hi < 2; hi++) hands[hi].set(0, -99, 0);
+  } else {
+    head.set(0, 0, 0);
+    camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    camera.getWorldDirection(fwd);
+  }
+  if (aNow && !aWas && fortyAccepted) setForty(!cfg.forty);
+  aWas = aNow;
+
+  // 40+40 light: 40 Hz is exactly 3 frames at 120 frames a second
+  lightOK = fps > 110 && fps < 130;
+  if (cfg.forty) {
+    material.uniforms.uFlick.value = lightOK ? (Math.round(ms / (1000 / 120)) % 3 === 0 ? 1.0 : 0.35) : 1.0;
+  }
+
+  // waves
+  if (cfg.forty) { if (cfg.mode === 'voice') { readMic(); smooth += (level - smooth) * 0.25; } }
+  else if (cfg.mode === 'voice') driveVoice(t); else driveSim(t);
+
+  // travel: a slow drift the way you face; the thumbstick speeds you up or stops you
+  boostAxis += (stick - boostAxis) * Math.min(1, dt * 3);
+  const v = Math.max(0, cfg.drift + boostAxis * 6);
+  drift.copy(fwd);
+  cam.x += fwd.x * v * dt; cam.y += fwd.y * v * dt; cam.z += fwd.z * v * dt;
+
+  // everything is drawn around your head; your place in the lattice is travel plus real movement
+  world.position.copy(head);
+  const px = cam.x + head.x, py = cam.y + head.y, pz = cam.z + head.z;
+  camUniform.set(wrap(px), wrap(py), wrap(pz));
+  for (let i = 0; i < SLOTS; i++) {
+    pulseRel[i * 3] = pulseWorld[i * 3] - px;
+    pulseRel[i * 3 + 1] = pulseWorld[i * 3 + 1] - py;
+    pulseRel[i * 3 + 2] = pulseWorld[i * 3 + 2] - pz;
+  }
+  // light size follows the height of the picture being drawn, so lights look the same size on any display
+  let H = renderer.getDrawingBufferSize(tmp).y;
+  if (inVR) { const xc = renderer.xr.getCamera(); if (xc.cameras && xc.cameras[0] && xc.cameras[0].viewport) H = xc.cameras[0].viewport.w || H; }
+  material.uniforms.uPx.value = 0.0263 * H * 0.5;
+  starMat.uniforms.uDpr.value = H / 800;
+  material.uniforms.uTime.value = t;
+  material.uniforms.uSpeed.value = cfg.speed;
+  material.uniforms.uLevel.value = (cfg.mode === 'voice' && !cfg.forty) ? smooth : 0;
+  starMat.uniforms.uTime.value = t;
+  renderer.render(scene, camera);
+
+  if (!inVR && t - uiTimer > 0.1) {
+    uiTimer = t;
+    if (cfg.mode === 'voice') {
+      $('meterFill').style.width = Math.round(smooth * 100) + '%';
+      $('lvlV').textContent = Math.round(smooth * 100) + '%';
+    }
+    statusEl.textContent = (analyser && silentFor >= 3)
+      ? 'The microphone is sending silence. Another app may be using it. Close that, then reload.'
+      : baseMsg + fortyMsg;
+  }
+});
+// for testing from the browser console
+window.pulseLattice = { touch: (x, y, z) => touchAt(cam.x + x, cam.y + y, cam.z + z, clock.getElapsedTime()) };
 </script>
 </body>
 </html>

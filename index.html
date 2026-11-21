@@ -32,7 +32,7 @@ body.sim .simOnly{display:flex}
 <body class="sim">
 <div id="start">
   <h1>PULSE LATTICE</h1>
-  <p>You are standing inside a field of lights that runs off in every direction. Turn and tilt your phone to look around. Your voice sends waves of light out through it.</p>
+  <p>You are inside a lattice of lights that never ends. Turn and tilt your phone to look around. You drift slowly the way you face: touch and hold to travel faster. Your voice sends waves of light out through it.</p>
   <p>Allow the microphone when asked. Sound is only measured for loudness on this phone. Nothing is recorded or sent.</p>
   <button id="go">Enter</button>
 </div>
@@ -43,6 +43,7 @@ body.sim .simOnly{display:flex}
     <div class="row voiceOnly"><span class="lab">Voice level</span><div id="meter"><div id="meterFill"></div></div><span class="val" id="lvlV"></span></div>
     <div class="row voiceOnly"><label for="sens">Sensitivity</label><input id="sens" type="range" min="1" max="10" step="1" value="6"><span class="val" id="sensV"></span></div>
     <div class="row simOnly"><label for="bpm">Pulse</label><input id="bpm" type="range" min="30" max="140" step="1" value="60"><span class="val" id="bpmV"></span></div>
+    <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="1"><span class="val" id="driftV"></span></div>
     <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="10" step="0.5" value="3"><span class="val" id="spdV"></span></div>
     <div id="status"></div>
   </div>
@@ -57,7 +58,7 @@ import * as THREE from 'three';
 const N = 50;            // nodes per axis: 50 m cube at 1 m pitch
 const PITCH = 1.0;       // metres between lights
 const SLOTS = 40;        // max simultaneous wave rings
-const cfg = { bpm: 60, speed: 3.0, width: 0.6, tail: 3.0, mode: 'sim', sens: 6 };
+const cfg = { bpm: 60, speed: 3.0, width: 0.6, tail: 3.0, mode: 'sim', sens: 6, drift: 1.0 };
 
 // ---- Lattice positions. Viewer sits at the origin, midway between nodes ----
 const HALF = (N - 1) * PITCH / 2;
@@ -78,12 +79,19 @@ geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), HALF * 1.75);
 // ---- Wave rings: each has a start time and a brightness (amplitude) ----
 const pulseTimes = new Float32Array(SLOTS).fill(-1e6);
 const pulseAmps = new Float32Array(SLOTS).fill(0);
+const pulseWorld = new Float64Array(SLOTS * 3);   // where each ring started, in world metres
+const pulseRel = new Float32Array(SLOTS * 3);     // the same, relative to where you are now
+const SIZE = N * PITCH;                            // the lattice repeats every SIZE metres, forever
+const cam = { x: 0, y: 0, z: 0 };                  // your position in the infinite lattice
+const camUniform = new THREE.Vector3();
 let slot = 0;
 function emit(time, amp) {
   pulseTimes[slot] = time;
   pulseAmps[slot] = amp;
+  pulseWorld[slot * 3] = cam.x; pulseWorld[slot * 3 + 1] = cam.y; pulseWorld[slot * 3 + 2] = cam.z;
   slot = (slot + 1) % SLOTS;
 }
+const wrap = v => ((v % SIZE) + SIZE) % SIZE;
 
 // ---- Shader: each light brightens as a wavefront passes it ----
 const material = new THREE.ShaderMaterial({
@@ -91,6 +99,8 @@ const material = new THREE.ShaderMaterial({
     uTime: { value: 0 },
     uPulseT: { value: pulseTimes },
     uPulseA: { value: pulseAmps },
+    uPulseO: { value: pulseRel },
+    uCam: { value: camUniform },
     uSpeed: { value: cfg.speed },
     uWidth: { value: cfg.width },
     uTail: { value: cfg.tail },
@@ -102,6 +112,8 @@ const material = new THREE.ShaderMaterial({
     uniform float uTime;
     uniform float uPulseT[${SLOTS}];
     uniform float uPulseA[${SLOTS}];
+    uniform vec3 uPulseO[${SLOTS}];
+    uniform vec3 uCam;
     uniform float uSpeed;
     uniform float uWidth;
     uniform float uTail;
@@ -112,7 +124,9 @@ const material = new THREE.ShaderMaterial({
     varying float vFade;
     varying float vTw;
     void main() {
-      float d = length(position);   // distance from the viewer
+      // the lattice wraps around you, so there is always more of it in every direction
+      vec3 rel = mod(position - uCam + 25.0, 50.0) - 25.0;
+      float d = length(rel);        // distance from the viewer
       // lights dissolve into the distance, so the field has no visible edge
       vFade = 1.0 - smoothstep(14.0, 24.0, d);
       // each light breathes slowly at its own rate
@@ -124,18 +138,19 @@ const material = new THREE.ShaderMaterial({
         float age = uTime - uPulseT[i];
         if (amp > 0.0 && age >= 0.0) {
           float r = age * uSpeed;      // wavefront radius
-          float ahead = (d - r) / uWidth;
+          float dp = length(rel - uPulseO[i]);   // distance from where this ring started
+          float ahead = (dp - r) / uWidth;
           float front = exp(-ahead * ahead);
-          float trail = (d < r) ? exp(-(r - d) / uTail) : 0.0;
+          float trail = (dp < r) ? exp(-(r - dp) / uTail) : 0.0;
           g += amp * (front + uTrailW * trail) * exp(-age * 0.25);
         }
       }
       // lights close to you lift gently with the live voice level
       g += 0.35 * uLevel * exp(-d / 6.0);
       vGlow = clamp(g, 0.0, 1.0);
-      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      vec4 mv = modelViewMatrix * vec4(rel, 1.0);
       gl_Position = projectionMatrix * mv;
-      gl_PointSize = min(48.0, (1.5 + 5.0 * vGlow) * uScale / max(0.1, -mv.z));
+      gl_PointSize = min(48.0, (2.0 + 5.0 * vGlow) * uScale / max(0.1, -mv.z));
     }
   `,
   fragmentShader: `
@@ -147,7 +162,7 @@ const material = new THREE.ShaderMaterial({
       float a = smoothstep(0.5, 0.0, length(c));
       vec3 base = vec3(0.12, 0.24, 0.46);
       vec3 hot = vec3(0.70, 0.95, 1.0);
-      float rest = 0.22 + 0.28 * vTw;          // resting glow, gently breathing
+      float rest = 0.32 + 0.33 * vTw;          // resting glow, gently breathing
       gl_FragColor = vec4(mix(base, hot, vGlow), a * vFade * (rest + (1.0 - rest) * vGlow));
     }
   `,
@@ -157,7 +172,9 @@ const material = new THREE.ShaderMaterial({
 });
 
 const scene = new THREE.Scene();
-scene.add(new THREE.Points(geometry, material));
+const cloud = new THREE.Points(geometry, material);
+cloud.frustumCulled = false;
+scene.add(cloud);
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 200);
 
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -202,9 +219,10 @@ function applySensor() {
 
 // ---- Look control 2: drag (fallback when there are no motion sensors) ----
 let yaw = 0, pitch = 0, dragging = false, lx = 0, ly = 0;
-renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; });
-addEventListener('pointerup', () => { dragging = false; });
-addEventListener('pointercancel', () => { dragging = false; });
+let holding = false, boost = 0;
+renderer.domElement.addEventListener('pointerdown', e => { dragging = true; holding = true; lx = e.clientX; ly = e.clientY; });
+addEventListener('pointerup', () => { dragging = false; holding = false; });
+addEventListener('pointercancel', () => { dragging = false; holding = false; });
 addEventListener('pointermove', e => {
   if (!dragging || sensor) return;
   yaw += (e.clientX - lx) * 0.005;
@@ -306,11 +324,13 @@ function readControls() {
   cfg.bpm = Number($('bpm').value);
   cfg.speed = Number($('spd').value);
   cfg.sens = Number($('sens').value);
+  cfg.drift = Number($('drift').value);
+  $('driftV').textContent = cfg.drift.toFixed(1) + ' m/s';
   $('bpmV').textContent = cfg.bpm + ' BPM';
   $('spdV').textContent = cfg.speed.toFixed(1) + ' m/s';
   $('sensV').textContent = cfg.sens + ' / 10';
 }
-['bpm', 'spd', 'sens'].forEach(id => $(id).addEventListener('input', readControls));
+['bpm', 'spd', 'sens', 'drift'].forEach(id => $(id).addEventListener('input', readControls));
 readControls();
 const panel = $('panel'), toggle = $('toggle');
 toggle.addEventListener('click', () => {
@@ -341,6 +361,8 @@ $('go').addEventListener('click', async () => {
 
 // ---- Animation loop ----
 const clock = new THREE.Clock();
+const fwd = new THREE.Vector3();
+let lastT = 0;
 const meterFill = $('meterFill'), lvlV = $('lvlV');
 let uiTimer = 0;
 renderer.setAnimationLoop(() => {
@@ -351,6 +373,18 @@ renderer.setAnimationLoop(() => {
   material.uniforms.uLevel.value = cfg.mode === 'voice' ? smooth : 0;
   if (sensor) applySensor();
   else camera.rotation.set(pitch, yaw, 0, 'YXZ');
+  // travel: a slow drift the way you are facing; touch and hold to move faster
+  const dt = Math.min(0.1, t - lastT); lastT = t;
+  boost += ((holding ? 1 : 0) - boost) * Math.min(1, dt * 3);
+  const v = cfg.drift + boost * 4;
+  camera.getWorldDirection(fwd);
+  cam.x += fwd.x * v * dt; cam.y += fwd.y * v * dt; cam.z += fwd.z * v * dt;
+  camUniform.set(wrap(cam.x), wrap(cam.y), wrap(cam.z));
+  for (let i = 0; i < SLOTS; i++) {
+    pulseRel[i * 3] = pulseWorld[i * 3] - cam.x;
+    pulseRel[i * 3 + 1] = pulseWorld[i * 3 + 1] - cam.y;
+    pulseRel[i * 3 + 2] = pulseWorld[i * 3 + 2] - cam.z;
+  }
   renderer.render(scene, camera);
   if (cfg.mode === 'voice' && t - uiTimer > 0.08) {
     uiTimer = t;

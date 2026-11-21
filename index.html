@@ -32,7 +32,7 @@ body.sim .simOnly{display:flex}
 <body class="sim">
 <div id="start">
   <h1>PULSE LATTICE</h1>
-  <p>You are inside a lattice of lights that never ends. Turn and tilt your phone to look around. You drift slowly the way you face: touch and hold to travel faster. Your voice sends waves of light out through it.</p>
+  <p>You are inside a lattice of lights that never ends. Turn and tilt your phone to look around. You drift slowly the way you face: touch and hold to travel faster. The lights stay dark until your voice sends a wave of light out through them.</p>
   <p>Allow the microphone when asked. Sound is only measured for loudness on this phone. Nothing is recorded or sent.</p>
   <button id="go">Enter</button>
 </div>
@@ -165,8 +165,9 @@ const material = new THREE.ShaderMaterial({
       float a = core + halo;
       vec3 base = vec3(0.45, 0.68, 1.0);
       vec3 hot = vec3(1.0, 1.0, 1.0);
-      float rest = 0.45 + 0.35 * vTw;          // resting glow, gently breathing
-      gl_FragColor = vec4(mix(base, hot, vGlow), a * vFade * (rest + (1.0 - rest) * vGlow));
+      // no resting glow: a light is invisible until a wave reaches it
+      if (vGlow < 0.004) discard;
+      gl_FragColor = vec4(mix(base, hot, vGlow), a * vFade * vGlow);
     }
   `,
   transparent: true,
@@ -241,6 +242,7 @@ let inDb = -120;         // latest raw input loudness
 let silentFor = 0;       // seconds the mic has delivered pure silence
 const mins = new Array(15).fill(null);   // quietest reading in each of the last 15 seconds
 let minSec = -1;
+let secMax = 0;         // loudest reading in the current second
 let level = 0;           // 0..1 voice level above the background
 let smooth = 0;          // smoothed level for display and near-field glow
 let micError = '';
@@ -286,8 +288,8 @@ function readMic() {
   // Background = the quietest moment of the last 15 seconds. A held hum cannot drag it up,
   // because any breath or pause inside that window resets it.
   const sec = Math.floor(performance.now() / 1000);
-  if (sec !== minSec) { minSec = sec; mins[sec % 15] = db; silentFor = db <= -119 ? silentFor + 1 : 0; }
-  else if (db < mins[sec % 15]) mins[sec % 15] = db;
+  if (sec !== minSec) { minSec = sec; mins[sec % 15] = db; silentFor = secMax <= -119 ? silentFor + 1 : 0; secMax = db; }
+  else { if (db < mins[sec % 15]) mins[sec % 15] = db; if (db > secMax) secMax = db; }
   let lo = Infinity;
   for (let i = 0; i < 15; i++) if (mins[i] !== null && mins[i] < lo) lo = mins[i];
   floorDb = Math.max(lo, -90);

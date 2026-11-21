@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Pulse Lattice</title>
 <style>
-html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif;color:#9fd8ff;touch-action:none;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%;background:#12305c;overflow:hidden;font-family:system-ui,sans-serif;color:#9fd8ff;touch-action:none;-webkit-user-select:none;user-select:none}
 canvas{display:block}
-#start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#000;z-index:10;text-align:center;padding:24px}
+#start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:#0b2244;z-index:10;text-align:center;padding:24px}
 #start h1{font-weight:300;letter-spacing:.2em;font-size:22px;margin:0}
 #start p{margin:0;max-width:300px;font-size:14px;line-height:1.5;color:#6f9fc4}
 #go{font-size:17px;padding:14px 34px;border-radius:30px;border:1px solid #9fd8ff;background:transparent;color:#9fd8ff}
-#panel{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(0,0,0,.55);font-size:13px;display:none}
+#panel{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(4,14,32,.6);font-size:13px;display:none}
 #panel.hidden .rows{display:none}
 .row{display:flex;align-items:center;gap:10px;margin:6px 0}
 .row label,.row .lab{width:92px}
@@ -58,7 +58,7 @@ import * as THREE from 'three';
 const N = 50;            // nodes per axis: 50 m cube at 1 m pitch
 const PITCH = 1.0;       // metres between lights
 const SLOTS = 40;        // max simultaneous wave rings
-const cfg = { bpm: 60, speed: 3.0, width: 0.6, tail: 3.0, mode: 'sim', sens: 6, drift: 1.0 };
+const cfg = { bpm: 60, speed: 3.0, width: 0.3, tail: 0.8, mode: 'sim', sens: 6, drift: 1.0 };
 
 // ---- Lattice positions. Viewer sits at the origin, midway between nodes ----
 const HALF = (N - 1) * PITCH / 2;
@@ -104,7 +104,7 @@ const material = new THREE.ShaderMaterial({
     uSpeed: { value: cfg.speed },
     uWidth: { value: cfg.width },
     uTail: { value: cfg.tail },
-    uTrailW: { value: 0.5 },
+    uTrailW: { value: 0.25 },
     uLevel: { value: 0 },
     uScale: { value: 30 }
   },
@@ -150,7 +150,7 @@ const material = new THREE.ShaderMaterial({
       vGlow = clamp(g, 0.0, 1.0);
       vec4 mv = modelViewMatrix * vec4(rel, 1.0);
       gl_Position = projectionMatrix * mv;
-      gl_PointSize = min(48.0, (2.0 + 5.0 * vGlow) * uScale / max(0.1, -mv.z));
+      gl_PointSize = clamp((2.2 + 3.2 * vGlow) * uScale / max(0.1, -mv.z), 1.5, 30.0);
     }
   `,
   fragmentShader: `
@@ -159,10 +159,13 @@ const material = new THREE.ShaderMaterial({
     varying float vTw;
     void main() {
       vec2 c = gl_PointCoord - vec2(0.5);
-      float a = smoothstep(0.5, 0.0, length(c));
-      vec3 base = vec3(0.12, 0.24, 0.46);
-      vec3 hot = vec3(0.70, 0.95, 1.0);
-      float rest = 0.32 + 0.33 * vTw;          // resting glow, gently breathing
+      float r = length(c);
+      float core = 1.0 - smoothstep(0.20, 0.26, r);          // crisp bright centre
+      float halo = (1.0 - smoothstep(0.26, 0.5, r)) * 0.28;  // thin glow around it
+      float a = core + halo;
+      vec3 base = vec3(0.45, 0.68, 1.0);
+      vec3 hot = vec3(1.0, 1.0, 1.0);
+      float rest = 0.45 + 0.35 * vTw;          // resting glow, gently breathing
       gl_FragColor = vec4(mix(base, hot, vGlow), a * vFade * (rest + (1.0 - rest) * vGlow));
     }
   `,
@@ -172,6 +175,7 @@ const material = new THREE.ShaderMaterial({
 });
 
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x12305c);
 const cloud = new THREE.Points(geometry, material);
 cloud.frustumCulled = false;
 scene.add(cloud);
@@ -181,7 +185,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: false });
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
 renderer.setPixelRatio(DPR);
 renderer.setSize(innerWidth, innerHeight);
-material.uniforms.uScale.value = 30 * DPR;
+material.uniforms.uScale.value = 15 * DPR;
 document.body.appendChild(renderer.domElement);
 
 function resize() {
@@ -232,7 +236,11 @@ addEventListener('pointermove', e => {
 
 // ---- Microphone: loudness only ----
 let analyser = null, audioCtx = null, buf = null;
-let floorDb = -60;       // running estimate of the room's background level
+let floorDb = -60;       // the room's background level: quietest moment in the last 15 s
+let inDb = -120;         // latest raw input loudness
+let silentFor = 0;       // seconds the mic has delivered pure silence
+const mins = new Array(15).fill(null);   // quietest reading in each of the last 15 seconds
+let minSec = -1;
 let level = 0;           // 0..1 voice level above the background
 let smooth = 0;          // smoothed level for display and near-field glow
 let micError = '';
@@ -274,8 +282,15 @@ function readMic() {
   for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
   const rms = Math.sqrt(sum / buf.length);
   const db = 20 * Math.log10(Math.max(rms, 1e-6));
-  // background follows quiet moments quickly and loud moments very slowly
-  floorDb += (db - floorDb) * (db < floorDb ? 0.05 : 0.0005);
+  inDb = db;
+  // Background = the quietest moment of the last 15 seconds. A held hum cannot drag it up,
+  // because any breath or pause inside that window resets it.
+  const sec = Math.floor(performance.now() / 1000);
+  if (sec !== minSec) { minSec = sec; mins[sec % 15] = db; silentFor = db <= -119 ? silentFor + 1 : 0; }
+  else if (db < mins[sec % 15]) mins[sec % 15] = db;
+  let lo = Infinity;
+  for (let i = 0; i < 15; i++) if (mins[i] !== null && mins[i] < lo) lo = mins[i];
+  floorDb = Math.max(lo, -90);
   level = levelFrom(db, floorDb, cfg.sens);
 }
 
@@ -311,11 +326,11 @@ function setMode(m) {
   document.body.className = m;
   $('mVoice').classList.toggle('on', m === 'voice');
   $('mSim').classList.toggle('on', m === 'sim');
-  material.uniforms.uTrailW.value = m === 'voice' ? 0.12 : 0.5;
+  material.uniforms.uTrailW.value = m === 'voice' ? 0.08 : 0.25;
   pulseAmps.fill(0);                     // clear waves from the other source
   voiceOn = false; smooth = 0; level = 0;
 }
-$('mSim').addEventListener('click', () => setMode('sim'));
+$('mSim').addEventListener('click', () => { setMode('sim'); statusEl.textContent = lookMsg; });
 $('mVoice').addEventListener('click', async () => {
   if (await startMic()) { setMode('voice'); statusEl.textContent = 'Voice on: hum, speak or sing.'; }
   else statusEl.textContent = 'Microphone not available (' + micError + '). Allow it for this site in Chrome, then tap Voice again.';
@@ -354,6 +369,7 @@ $('go').addEventListener('click', async () => {
   panel.style.display = 'block';
   setTimeout(() => {
     const look = sensorEvents > 0 ? 'Motion sensors on.' : 'No motion sensor data: drag to look.';
+    lookMsg = look; started = true;
     const src = mic ? 'Voice on: hum, speak or sing.' : 'Microphone not available (' + micError + '): using simulated pulse.';
     statusEl.textContent = look + ' ' + src;
   }, 1500);
@@ -364,7 +380,7 @@ const clock = new THREE.Clock();
 const fwd = new THREE.Vector3();
 let lastT = 0;
 const meterFill = $('meterFill'), lvlV = $('lvlV');
-let uiTimer = 0;
+let uiTimer = 0, started = false, lookMsg = '';
 renderer.setAnimationLoop(() => {
   const t = clock.getElapsedTime();
   if (cfg.mode === 'voice') driveVoice(t); else driveSim(t);
@@ -390,6 +406,11 @@ renderer.setAnimationLoop(() => {
     uiTimer = t;
     meterFill.style.width = Math.round(smooth * 100) + '%';
     lvlV.textContent = Math.round(smooth * 100) + '%';
+    if (analyser && started) {
+      statusEl.textContent = silentFor >= 3
+        ? 'The microphone is sending silence. Another app may be using it (a screen recorder or a call). Close that, then reload.'
+        : lookMsg + ' Mic in ' + Math.round(inDb) + ' dB, room ' + Math.round(floorDb) + ' dB.';
+    }
   }
 });
 </script>

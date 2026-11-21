@@ -48,7 +48,7 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
 <body class="sim">
 <div id="start">
   <h1>PULSE LATTICE</h1>
-  <p id="intro">A lattice of lights that never ends, dark until your voice wakes it. Turn and tilt your phone to look around. You drift the way you face: touch and hold to travel faster.</p>
+  <p id="intro">A lattice of lights that never ends, dark until your voice wakes it. Swipe to look around. You drift the way you face: touch and hold to travel faster.</p>
   <div class="modes" id="devRow" style="max-width:420px;width:100%;flex:none">
     <button data-dev="phone">Phone</button><button data-dev="pc">PC</button><button data-dev="vr">VR</button>
   </div>
@@ -88,8 +88,8 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
     <div class="row"><span class="lab">Face lights</span><div class="modes"><button data-faces="on">On</button><button data-faces="off">Off</button></div></div>
     <div class="row"><label for="jit">Jitter</label><input id="jit" type="range" min="0" max="100" step="5" value="100"><span class="val" id="jitV"></span></div>
     <div class="row"><label for="pitch">Spacing</label><input id="pitch" type="range" min="0.2" max="1.5" step="0.05" value="0.5"><span class="val" id="pitchV"></span></div>
-    <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="1"><span class="val" id="driftV"></span></div>
-    <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="30" step="0.5" value="6"><span class="val" id="spdV"></span></div>
+    <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="3"><span class="val" id="driftV"></span></div>
+    <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="30" step="0.5" value="8"><span class="val" id="spdV"></span></div>
   </div>
 
   <div class="sec" id="sec-sets">
@@ -130,7 +130,7 @@ const HEADSETS = {
 let headset = 'q3';
 const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, pitch: 0.5,
               sound: false, echo: false, toneHz: 432, toneVol: 0, scape: 'off', scapeVol: 60, reach: 1,
-              lights: 'always', faces: false, jitter: 0, set: 'pulse', bg: 'space', light: 'natural', deep: true, look: 'motion', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
+              lights: 'always', faces: false, jitter: 0, set: 'pulse', bg: 'space', light: 'natural', deep: true, look: 'swipe', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
 // Breathing patterns, in seconds: in, hold, out, hold
 const PATTERNS = { coh: [5, 0, 5, 0], box: [4, 4, 4, 4], '478': [4, 7, 8, 0] };
 const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.65, 0.48, 1.00], COL_FUCHSIA = [1.00, 0.08, 0.78];
@@ -1157,7 +1157,7 @@ const clock = new THREE.Clock();
 // ---- Phone, PC or VR: chosen on the start screen (the page guesses, you can change it) ----
 let device = 'pc';
 const INTRO = {
-  phone: 'A lattice of lights that never ends, dark until your voice wakes it. Turn and tilt your phone to look around. You drift the way you face: touch and hold to travel faster.',
+  phone: 'A lattice of lights that never ends, dark until your voice wakes it. Swipe to look around. You drift the way you face: touch and hold to travel faster.',
   pc: 'A lattice of lights that never ends, dark until your voice wakes it. Drag to look around. You drift the way you face: click and hold to travel faster.',
   vr: 'A lattice of lights that never ends, dark until your voice wakes it. Choose your headset, then Enter. Set things up on the next screen, then press Enter VR.'
 };
@@ -1177,7 +1177,7 @@ all('[data-dev]').forEach(b => b.addEventListener('click', () => setDevice(b.dat
 (async () => {
   try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
 })();
-readControls(); setSound(false); setEcho(false); setSharp(true); setLights('always'); setLook('motion'); setDeep(true); setBackground('space'); setLightColour('natural'); setFaces(true); setPattern('coh'); setBeat(6);
+readControls(); setSound(false); setEcho(false); setSharp(true); setLights('always'); setLook('swipe'); setDeep(true); setBackground('space'); setLightColour('natural'); setFaces(true); setPattern('coh'); setBeat(6);
 all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === 'pulse'));
 document.body.dataset.active = 'pulse';
 setReach(1);
@@ -1212,7 +1212,7 @@ $('go').addEventListener('click', async () => {
         ? 'Set things up here, then press Enter VR. In VR: right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. The A button turns 40+40 on and off once you have accepted its warning here.'
         : 'This browser cannot start VR. Open this page in the headset\'s own browser. Until then this is a preview: drag to look.');
     } else if (device === 'phone') {
-      lookMsg = (sensorEvents > 0 ? 'Motion sensors on. To look around without moving the phone, choose Display, Look by, Swiping.' : 'No motion sensor data: swipe to look.') + ' Tap the screen to show or hide the menus.';
+      lookMsg = 'Swipe to look around. ' + (sensorEvents > 0 ? 'To steer by moving the phone instead, choose Display, Look by, Moving phone. ' : '') + 'Tap the screen to show or hide the menus.';
       if (sensorEvents === 0) setLook('swipe');
     } else {
       lookMsg = 'Drag to look. Click and hold to travel faster.';

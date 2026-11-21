@@ -442,7 +442,7 @@ function applyTone() {
   swellGain.gain.setTargetAtTime(g * 0.2, now, 0.1);
 }
 // ---- 40+40: light and sound pulsed 40 times a second ----
-let fps = 60, lightOK = false;
+let fps = 60, lightOK = false, voiceOn = false;
 function setForty(on) {
   cfg.forty = on;
   $('fOn').classList.toggle('on', on);
@@ -453,7 +453,8 @@ function setForty(on) {
     pulser.gain.setTargetAtTime(on ? 0.5 : 1, now, 0.05);
     pulseDepth.gain.setTargetAtTime(on ? 0.5 : 0, now, 0.05);
   }
-  material.uniforms.uRest.value = on ? 0.55 : 0;
+  material.uniforms.uRest.value = on ? 0.8 : 0;
+  pulseAmps.fill(0); voiceOn = false;      // clear any waves in flight
   if (!on) material.uniforms.uFlick.value = 1;
   fortyMsg = !on ? '' : (lightOK
     ? ' 40+40 on: light and sound at 40 Hz.'
@@ -529,7 +530,7 @@ function readMic() {
 }
 
 // ---- Wave sources ----
-let nextBeat = 0, voiceOn = false, lastVoiceEmit = -1e6;
+let nextBeat = 0, lastVoiceEmit = -1e6;
 const ON = 0.08, OFF = 0.04;
 function driveSim(t) {
   const interval = 60 / cfg.bpm;
@@ -640,8 +641,10 @@ renderer.setAnimationLoop((ms) => {
     const k = Math.round(ms / (1000 / 120)) % 3;
     material.uniforms.uFlick.value = k === 0 ? 1.0 : 0.35;
   }
-  if (cfg.mode === 'voice') driveVoice(t); else driveSim(t);
-  const lvl = cfg.mode === 'voice' ? smooth : 0;
+  // in 40+40 the lights ignore voice and pulse waves: they only pulse at 40 Hz
+  if (cfg.forty) { if (cfg.mode === 'voice') { readMic(); smooth += (level - smooth) * 0.25; } }
+  else if (cfg.mode === 'voice') driveVoice(t); else driveSim(t);
+  const lvl = (cfg.mode === 'voice' && !cfg.forty) ? smooth : 0;
   material.uniforms.uTime.value = t;
   material.uniforms.uSpeed.value = cfg.speed;
   material.uniforms.uLevel.value = lvl;

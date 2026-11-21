@@ -78,6 +78,7 @@ body.sim .simOnly{display:flex}
   <div class="sec" id="sec-ar">
     <div class="row"><span class="lab">Lights</span><div class="modes"><button data-lights="always">Always on</button><button data-lights="sound">Sound activated</button></div></div>
     <div class="row"><span class="lab">Face lights</span><div class="modes"><button data-faces="on">On</button><button data-faces="off">Off</button></div></div>
+    <div class="row"><label for="jit">Jitter</label><input id="jit" type="range" min="0" max="100" step="5" value="0"><span class="val" id="jitV"></span></div>
     <div class="row"><label for="pitch">Spacing</label><input id="pitch" type="range" min="0.2" max="1.5" step="0.05" value="0.5"><span class="val" id="pitchV"></span></div>
     <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="1"><span class="val" id="driftV"></span></div>
     <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="30" step="0.5" value="6"><span class="val" id="spdV"></span></div>
@@ -116,7 +117,7 @@ const HEADSETS = {
 let headset = 'q3';
 const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, pitch: 0.5,
               sound: true, echo: false, toneHz: 432, toneVol: 35, water: 'off', waterVol: 50,
-              lights: 'sound', faces: false, set: 'none', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
+              lights: 'sound', faces: false, jitter: 0, set: 'none', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
 // Breathing patterns, in seconds: in, hold, out, hold
 const PATTERNS = { coh: [5, 0, 5, 0], box: [4, 4, 4, 4], '478': [4, 7, 8, 0] };
 const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.65, 0.48, 1.00], COL_FUCHSIA = [1.00, 0.08, 0.78];
@@ -233,6 +234,18 @@ let slot = 0;
 const wrap = v => ((v % SIZE) + SIZE) % SIZE;
 
 let cloud = null, lightCount = 0;
+// Jitter: every light has its own fixed random nudge, the same each time, worked out from where it sits in the block.
+const jv = [0, 0, 0];
+function jitterOf(i, j, k, type) {
+  let s = ((i * 73856093) ^ (j * 19349663) ^ (k * 83492791) ^ ((type + 1) * 40503)) >>> 0;
+  for (let a = 0; a < 3; a++) {
+    s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+    jv[a] = s / 4294967296 * 2 - 1;
+  }
+  return jv;
+}
+// how far a light may be nudged, in lattice steps: up to half the gap to its nearest neighbour at 100%
+const jitterReach = () => cfg.jitter / 100 * (cfg.faces ? 0.35 : 0.5);
 // Positions are in lattice steps; the Spacing setting turns steps into metres.
 // With face lights on, each cube also gets a light in the middle of each of its square faces (4 lights per
 // cube where there was 1), and the block is made smaller so the total number of lights stays about the same.
@@ -243,16 +256,21 @@ function buildGeometry() {
   SIZE = M;
   const HALF = (M - 1) / 2, per = cfg.faces ? 4 : 1;
   lightCount = M * M * M * per;
-  const positions = new Float32Array(lightCount * 3);
+  const positions = new Float32Array(lightCount * 3), jits = new Float32Array(lightCount * 3);
   let p = 0;
-  const put = (x, y, z) => { positions[p++] = x; positions[p++] = y; positions[p++] = z; };
+  const put = (x, y, z, i, j, k, type) => {
+    jitterOf(i, j, k, type);
+    jits[p] = jv[0]; jits[p + 1] = jv[1]; jits[p + 2] = jv[2];
+    positions[p++] = x; positions[p++] = y; positions[p++] = z;
+  };
   for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) for (let k = 0; k < M; k++) {
     const x = i - HALF, y = j - HALF, z = k - HALF;
-    put(x, y, z);
-    if (cfg.faces) { put(x + 0.5, y + 0.5, z); put(x + 0.5, y, z + 0.5); put(x, y + 0.5, z + 0.5); }
+    put(x, y, z, i, j, k, 0);
+    if (cfg.faces) { put(x + 0.5, y + 0.5, z, i, j, k, 1); put(x + 0.5, y, z + 0.5, i, j, k, 2); put(x, y + 0.5, z + 0.5, i, j, k, 3); }
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('aJit', new THREE.BufferAttribute(jits, 3));
   if (cloud) { cloud.geometry.dispose(); cloud.geometry = geometry; material.uniforms.uHalf.value = SIZE / 2; }
   return geometry;
 }
@@ -268,7 +286,7 @@ function buildLattice() {
     uniforms: {
       uTime: { value: 0 }, uPulseT: { value: pulseTimes }, uPulseA: { value: pulseAmps },
       uPulseO: { value: pulseRel }, uPulseD: { value: pulseDir }, uCam: { value: camUniform },
-      uHand: { value: hands }, uHalf: { value: SIZE / 2 }, uPitch: { value: cfg.pitch },
+      uHand: { value: hands }, uHalf: { value: SIZE / 2 }, uPitch: { value: cfg.pitch }, uJit: { value: 0 },
       uSpeed: { value: cfg.speed }, uWidth: { value: cfg.width }, uEmber: { value: cfg.ember },
       uLevel: { value: 0 }, uRest: { value: 0 }, uFlick: { value: 1 }, uPx: { value: 20 },
       uSetCol: { value: setCol }, uSetMix: { value: 0 }
@@ -283,6 +301,8 @@ function buildLattice() {
       uniform vec3 uHand[2];
       uniform float uHalf;
       uniform float uPitch;
+      uniform float uJit;
+      attribute vec3 aJit;
       uniform float uSpeed;
       uniform float uWidth;
       uniform float uEmber;
@@ -296,7 +316,7 @@ function buildLattice() {
       varying vec3 vTint;
       void main() {
         // the lattice wraps around you, so there is always more of it in every direction
-        vec3 rel = (mod(position - uCam + uHalf, 2.0 * uHalf) - uHalf) * uPitch;   // uPitch: metres between lights
+        vec3 rel = (mod(position - uCam + uHalf, 2.0 * uHalf) - uHalf + aJit * uJit) * uPitch;   // uPitch: metres between lights
         float d = length(rel);
         float g = 0.0;
         for (int i = 0; i < ${SLOTS}; i++) {
@@ -622,9 +642,18 @@ function nearestLight(ux, uy, uz) {
   const rx = Math.round(ux), ry = Math.round(uy), rz = Math.round(uz);
   const cands = cfg.faces ? [[hx, hy, hz], [rx, ry, hz], [rx, hy, rz], [hx, ry, rz]] : [[hx, hy, hz]];
   near[3] = Infinity;
-  for (const c of cands) {
-    const d2 = (ux - c[0]) ** 2 + (uy - c[1]) ** 2 + (uz - c[2]) ** 2;
-    if (d2 < near[3]) { near[0] = c[0]; near[1] = c[1]; near[2] = c[2]; near[3] = d2; }
+  const HALF = (SIZE - 1) / 2, reach = jitterReach(), m = v => ((Math.round(v) % SIZE) + SIZE) % SIZE;
+  for (let type = 0; type < cands.length; type++) {
+    const c = cands[type];
+    let x = c[0], y = c[1], z = c[2];
+    if (reach > 0) {
+      // which light in the block this is, so it gets the same nudge the picture uses
+      const ox = type === 1 || type === 2 ? 0.5 : 0, oy = type === 1 || type === 3 ? 0.5 : 0, oz = type === 2 || type === 3 ? 0.5 : 0;
+      jitterOf(m(x - ox + HALF), m(y - oy + HALF), m(z - oz + HALF), type);
+      x += jv[0] * reach; y += jv[1] * reach; z += jv[2] * reach;
+    }
+    const d2 = (ux - x) ** 2 + (uy - y) ** 2 + (uz - z) ** 2;
+    if (d2 < near[3]) { near[0] = x; near[1] = y; near[2] = z; near[3] = d2; }
   }
   return near;
 }
@@ -637,7 +666,7 @@ function checkTouch(i, hx, hy, hz, pressed, t) {
   // hx,hy,hz: hand position in the room. Its place in the lattice adds how far you have travelled.
   const s = cfg.pitch, ax = cam.x + hx, ay = cam.y + hy, az = cam.z + hz;
   const n = nearestLight(ax / s, ay / s, az / s);
-  const key = n[0] + ',' + n[1] + ',' + n[2], d2 = n[3];
+  const key = n[0].toFixed(3) + ',' + n[1].toFixed(3) + ',' + n[2].toFixed(3), d2 = n[3];
   if ((d2 < 0.04 || pressed) && key !== lastTouch[i]) { lastTouch[i] = key; touchAt(ax, ay, az, t); }
   else if (d2 > 0.09 && !pressed) lastTouch[i] = '';
 }
@@ -787,9 +816,11 @@ function readControls() {
   $('pitchV').textContent = cfg.pitch.toFixed(2) + ' m';
   $('wvolV').textContent = cfg.waterVol + '%';
   $('goalV').textContent = cfg.goal + ' s';
+  cfg.jitter = Number($('jit').value);
+  $('jitV').textContent = cfg.jitter + '%';
   applyTone(); applyWater();
 }
-['bpm', 'spd', 'sens', 'drift', 'hz', 'tvol', 'pitch', 'wvol', 'goal'].forEach(id => $(id).addEventListener('input', readControls));
+['bpm', 'spd', 'sens', 'drift', 'hz', 'tvol', 'pitch', 'wvol', 'goal', 'jit'].forEach(id => $(id).addEventListener('input', readControls));
 function nudgeHz(by) { const el = $('hz'); el.value = Math.max(40, Math.min(1000, Number(el.value) + by)); readControls(); showPanel(); }
 $('hzDn').addEventListener('click', () => nudgeHz(-1));
 $('hzUp').addEventListener('click', () => nudgeHz(1));
@@ -992,6 +1023,7 @@ renderer.setAnimationLoop((ms, frame) => {
   const px = cam.x + head.x, py = cam.y + head.y, pz = cam.z + head.z;
   camUniform.set(wrap(px / cfg.pitch), wrap(py / cfg.pitch), wrap(pz / cfg.pitch));   // in lattice steps
   material.uniforms.uPitch.value = cfg.pitch;
+  material.uniforms.uJit.value = jitterReach();
   for (let i = 0; i < SLOTS; i++) {
     pulseRel[i * 3] = pulseWorld[i * 3] - px;
     pulseRel[i * 3 + 1] = pulseWorld[i * 3 + 1] - py;

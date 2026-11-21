@@ -77,6 +77,7 @@ body.sim .simOnly{display:flex}
 
   <div class="sec" id="sec-ar">
     <div class="row"><span class="lab">Lights</span><div class="modes"><button data-lights="always">Always on</button><button data-lights="sound">Sound activated</button></div></div>
+    <div class="row"><span class="lab">Face lights</span><div class="modes"><button data-faces="on">On</button><button data-faces="off">Off</button></div></div>
     <div class="row"><label for="pitch">Spacing</label><input id="pitch" type="range" min="0.2" max="1.5" step="0.05" value="0.5"><span class="val" id="pitchV"></span></div>
     <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="1"><span class="val" id="driftV"></span></div>
     <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="30" step="0.5" value="6"><span class="val" id="spdV"></span></div>
@@ -115,7 +116,7 @@ const HEADSETS = {
 let headset = 'q3';
 const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, pitch: 0.5,
               sound: true, echo: false, toneHz: 432, toneVol: 35, water: 'off', waterVol: 50,
-              lights: 'sound', set: 'none', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
+              lights: 'sound', faces: false, set: 'none', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
 // Breathing patterns, in seconds: in, hold, out, hold
 const PATTERNS = { coh: [5, 0, 5, 0], box: [4, 4, 4, 4], '478': [4, 7, 8, 0] };
 const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.65, 0.48, 1.00], COL_FUCHSIA = [1.00, 0.08, 0.78];
@@ -231,16 +232,33 @@ const hands = [new THREE.Vector3(0, -99, 0), new THREE.Vector3(0, -99, 0)];   //
 let slot = 0;
 const wrap = v => ((v % SIZE) + SIZE) % SIZE;
 
-function buildLattice() {
-  N = HEADSETS[headset].n; SLOTS = HEADSETS[headset].slots; SIZE = N;
-  const HALF = (N - 1) / 2, count = N * N * N;
-  const positions = new Float32Array(count * 3);   // in lattice steps; the Spacing setting turns steps into metres
+let cloud = null, lightCount = 0;
+// Positions are in lattice steps; the Spacing setting turns steps into metres.
+// With face lights on, each cube also gets a light in the middle of each of its square faces (4 lights per
+// cube where there was 1), and the block is made smaller so the total number of lights stays about the same.
+function buildGeometry() {
+  N = HEADSETS[headset].n;
+  let M = N;
+  if (cfg.faces) { M = Math.round(N / Math.cbrt(4)); if (M % 2) M++; }
+  SIZE = M;
+  const HALF = (M - 1) / 2, per = cfg.faces ? 4 : 1;
+  lightCount = M * M * M * per;
+  const positions = new Float32Array(lightCount * 3);
   let p = 0;
-  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) for (let k = 0; k < N; k++) {
-    positions[p++] = i - HALF; positions[p++] = j - HALF; positions[p++] = k - HALF;
+  const put = (x, y, z) => { positions[p++] = x; positions[p++] = y; positions[p++] = z; };
+  for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) for (let k = 0; k < M; k++) {
+    const x = i - HALF, y = j - HALF, z = k - HALF;
+    put(x, y, z);
+    if (cfg.faces) { put(x + 0.5, y + 0.5, z); put(x + 0.5, y, z + 0.5); put(x, y + 0.5, z + 0.5); }
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  if (cloud) { cloud.geometry.dispose(); cloud.geometry = geometry; material.uniforms.uHalf.value = SIZE / 2; }
+  return geometry;
+}
+function buildLattice() {
+  SLOTS = HEADSETS[headset].slots;
+  const geometry = buildGeometry();
   pulseTimes = new Float32Array(SLOTS).fill(-1e6);
   pulseAmps = new Float32Array(SLOTS).fill(0);
   pulseWorld = new Float64Array(SLOTS * 3);
@@ -311,7 +329,7 @@ function buildLattice() {
         vTint = mix(vec3(0.72, 0.85, 1.0), vec3(1.0, 0.92, 0.80), h * h * h);
         vec4 mv = modelViewMatrix * vec4(rel, 1.0);
         gl_Position = projectionMatrix * mv;
-        vSize = clamp((2.0 + 7.0 * vGlow * vGlow) * uPx * projectionMatrix[1][1] / max(0.1, -mv.z), 2.0, 110.0);
+        vSize = clamp((2.0 + 7.0 * vGlow * vGlow) * uPx * projectionMatrix[1][1] / max(0.1, -mv.z), 1.5, 110.0);
         gl_PointSize = vGlow < 0.004 ? 0.0 : vSize;
       }
     `,
@@ -340,7 +358,7 @@ function buildLattice() {
     `,
     transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
   });
-  const cloud = new THREE.Points(geometry, material);
+  cloud = new THREE.Points(geometry, material);
   cloud.frustumCulled = false; cloud.renderOrder = 2;
   world.add(cloud);
 }
@@ -596,21 +614,32 @@ function driveVoice(t, dt, waves) {
 // ---- Touching a light (VR) ----
 const drift = new THREE.Vector3(0, 0, -1);        // the way you are travelling
 const lastTouch = ['', ''];
+// The light nearest a point. Works in lattice steps: corner lights sit at half steps on all three axes;
+// face lights sit at whole steps on two axes and a half step on the third.
+const near = [0, 0, 0, 0];      // x, y, z in steps, and squared distance in steps
+function nearestLight(ux, uy, uz) {
+  const hx = Math.floor(ux) + 0.5, hy = Math.floor(uy) + 0.5, hz = Math.floor(uz) + 0.5;
+  const rx = Math.round(ux), ry = Math.round(uy), rz = Math.round(uz);
+  const cands = cfg.faces ? [[hx, hy, hz], [rx, ry, hz], [rx, hy, rz], [hx, ry, rz]] : [[hx, hy, hz]];
+  near[3] = Infinity;
+  for (const c of cands) {
+    const d2 = (ux - c[0]) ** 2 + (uy - c[1]) ** 2 + (uz - c[2]) ** 2;
+    if (d2 < near[3]) { near[0] = c[0]; near[1] = c[1]; near[2] = c[2]; near[3] = d2; }
+  }
+  return near;
+}
 function touchAt(ax, ay, az, t) {
-  // lights sit half a step in from each whole step of the spacing
-  const s = cfg.pitch;
-  const ix = Math.floor(ax / s), iy = Math.floor(ay / s), iz = Math.floor(az / s);
-  emit(t, 1, (ix + 0.5) * s, (iy + 0.5) * s, (iz + 0.5) * s, drift.x, drift.y, drift.z);
-  chime(ix * 7 + iy * 13 + iz * 29);
+  const s = cfg.pitch, n = nearestLight(ax / s, ay / s, az / s);
+  emit(t, 1, n[0] * s, n[1] * s, n[2] * s, drift.x, drift.y, drift.z);
+  chime(Math.round(n[0] * 14 + n[1] * 26 + n[2] * 58));
 }
 function checkTouch(i, hx, hy, hz, pressed, t) {
   // hx,hy,hz: hand position in the room. Its place in the lattice adds how far you have travelled.
   const s = cfg.pitch, ax = cam.x + hx, ay = cam.y + hy, az = cam.z + hz;
-  const nx = (Math.floor(ax / s) + 0.5) * s, ny = (Math.floor(ay / s) + 0.5) * s, nz = (Math.floor(az / s) + 0.5) * s;
-  const key = nx.toFixed(3) + ',' + ny.toFixed(3) + ',' + nz.toFixed(3);
-  const d2 = ((ax - nx) ** 2 + (ay - ny) ** 2 + (az - nz) ** 2) / (s * s);
-  if ((d2 < 0.05 || pressed) && key !== lastTouch[i]) { lastTouch[i] = key; touchAt(ax, ay, az, t); }
-  else if (d2 > 0.12 && !pressed) lastTouch[i] = '';
+  const n = nearestLight(ax / s, ay / s, az / s);
+  const key = n[0] + ',' + n[1] + ',' + n[2], d2 = n[3];
+  if ((d2 < 0.04 || pressed) && key !== lastTouch[i]) { lastTouch[i] = key; touchAt(ax, ay, az, t); }
+  else if (d2 > 0.09 && !pressed) lastTouch[i] = '';
 }
 
 // ---- Looking: phone motion sensors, or drag ----
@@ -687,6 +716,12 @@ $('eOn').addEventListener('click', () => setEcho(true));
 $('eOff').addEventListener('click', () => setEcho(false));
 all('[data-water]').forEach(b => b.addEventListener('click', () => { cfg.water = b.dataset.water; waterBySet = false; applyWater(); }));
 all('[data-lights]').forEach(b => b.addEventListener('click', () => setLights(b.dataset.lights)));
+function setFaces(on) {
+  cfg.faces = on;
+  all('[data-faces]').forEach(b => b.classList.toggle('on', (b.dataset.faces === 'on') === on));
+  if (cloud) { buildGeometry(); setMsg = ' ' + lightCount.toLocaleString() + ' lights per block.'; }
+}
+all('[data-faces]').forEach(b => b.addEventListener('click', () => setFaces(b.dataset.faces === 'on')));
 function setLights(v) {
   cfg.lights = v;
   all('[data-lights]').forEach(b => b.classList.toggle('on', b.dataset.lights === v));
@@ -795,7 +830,7 @@ all('[data-dev]').forEach(b => b.addEventListener('click', () => setDevice(b.dat
 (async () => {
   try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
 })();
-readControls(); setSound(true); setEcho(false); setSharp(true); setLights('sound'); setPattern('coh'); setBeat(6);
+readControls(); setSound(true); setEcho(false); setSharp(true); setLights('sound'); setFaces(false); setPattern('coh'); setBeat(6);
 all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === 'none'));
 applyWater();
 
@@ -822,7 +857,7 @@ $('go').addEventListener('click', async () => {
   started = true;
   setTimeout(() => {
     if (device === 'vr') {
-      lookMsg = HEADSETS[headset].label + ': ' + (N * N * N).toLocaleString() + ' lights per block. ' + (vrSupported
+      lookMsg = HEADSETS[headset].label + ': ' + lightCount.toLocaleString() + ' lights per block. ' + (vrSupported
         ? 'Set things up here, then press Enter VR. In VR: right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. The A button turns 40+40 on and off once you have accepted its warning here.'
         : 'This browser cannot start VR. Open this page in the headset\'s own browser. Until then this is a preview: drag to look.');
     } else if (device === 'phone') {
@@ -965,7 +1000,9 @@ renderer.setAnimationLoop((ms, frame) => {
   // light size follows the height of the picture being drawn, so lights look the same size on any display
   let H = renderer.getDrawingBufferSize(tmp).y;
   if (inVR) { const xc = renderer.xr.getCamera(); if (xc.cameras && xc.cameras[0] && xc.cameras[0].viewport) H = xc.cameras[0].viewport.w || H; }
-  material.uniforms.uPx.value = 0.0263 * H * 0.5;
+  // a tighter or fuller lattice puts more lights in view, so each is drawn smaller to keep the overall brightness even
+  const dens = Math.max(0.3, Math.min(1.2, cfg.pitch * 5 / Math.sqrt((cfg.faces ? 4 : 1) * SIZE / 2)));
+  material.uniforms.uPx.value = 0.0263 * H * 0.5 * dens;
   starMat.uniforms.uDpr.value = H / 800;
   material.uniforms.uTime.value = t;
   material.uniforms.uSpeed.value = cfg.speed;
@@ -991,7 +1028,8 @@ renderer.setAnimationLoop((ms, frame) => {
 // for testing from the browser console
 window.pulseLattice = {
   touch: (x, y, z) => touchAt(cam.x + x, cam.y + y, cam.z + z, clock.getElapsedTime()),
-  state: () => ({ set: cfg.set, mode: cfg.mode, lights: cfg.lights, water: cfg.water, humT, mix: mixNow, rest: material ? material.uniforms.uRest.value : 0, col: colNow.slice(), fps })
+  near: (x, y, z) => Array.from(nearestLight(x, y, z)),
+  state: () => ({ lightCount, size: SIZE, faces: cfg.faces, set: cfg.set, mode: cfg.mode, lights: cfg.lights, water: cfg.water, humT, mix: mixNow, rest: material ? material.uniforms.uRest.value : 0, col: colNow.slice(), fps })
 };
 </script>
 </body>

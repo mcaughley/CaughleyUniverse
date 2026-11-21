@@ -34,6 +34,7 @@ canvas{display:block}
 .voiceOnly,.simOnly,.opt{display:none}
 body.voice .voiceOnly{display:flex}
 body.sim .simOnly{display:flex}
+select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #35607f;background:#06101c;color:#9fd8ff;font-size:13px}
 .note{color:#6f9fc4;font-size:12px;line-height:1.4;margin:4px 0}
 </style>
 </head>
@@ -67,8 +68,8 @@ body.sim .simOnly{display:flex}
     <div class="row"><span class="lab">Sound</span><div class="modes"><button id="sOn">On</button><button id="sOff">Off</button></div></div>
     <div class="row"><label for="hz">Tone</label><button class="step" id="hzDn">&minus;</button><input id="hz" type="range" min="40" max="1000" step="1" value="432"><button class="step" id="hzUp">+</button><span class="val" id="hzV"></span></div>
     <div class="row"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="35"><span class="val" id="tvolV"></span></div>
-    <div class="row"><span class="lab">Water</span><div class="modes"><button data-water="off">Off</button><button data-water="stream">Stream</button><button data-water="rain">Rain</button></div></div>
-    <div class="row"><label for="wvol">Water volume</label><input id="wvol" type="range" min="0" max="100" step="1" value="50"><span class="val" id="wvolV"></span></div>
+    <div class="row"><label for="scape">Soundscape</label><select id="scape"></select></div>
+    <div class="row"><label for="wvol">Scape volume</label><input id="wvol" type="range" min="0" max="100" step="1" value="60"><span class="val" id="wvolV"></span></div>
     <div class="row voiceOnly"><span class="lab">Voice echo</span><div class="modes"><button id="eOn">On (headphones)</button><button id="eOff">Off</button></div></div>
     <div class="row voiceOnly"><span class="lab">Voice level</span><div id="meter"><div id="meterFill"></div></div><span class="val" id="lvlV"></span></div>
     <div class="row voiceOnly"><label for="sens">Sensitivity</label><input id="sens" type="range" min="1" max="10" step="1" value="6"><span class="val" id="sensV"></span></div>
@@ -77,6 +78,7 @@ body.sim .simOnly{display:flex}
 
   <div class="sec" id="sec-ar">
     <div class="row"><span class="lab">Lights</span><div class="modes"><button data-lights="always">Always on</button><button data-lights="sound">Sound activated</button></div></div>
+    <div class="row"><span class="lab">Reach</span><div class="modes"><button data-reach="1">Standard</button><button data-reach="1.2">Far</button><button data-reach="1.4">Farthest</button></div></div>
     <div class="row"><span class="lab">Face lights</span><div class="modes"><button data-faces="on">On</button><button data-faces="off">Off</button></div></div>
     <div class="row"><label for="jit">Jitter</label><input id="jit" type="range" min="0" max="100" step="5" value="0"><span class="val" id="jitV"></span></div>
     <div class="row"><label for="pitch">Spacing</label><input id="pitch" type="range" min="0.2" max="1.5" step="0.05" value="0.5"><span class="val" id="pitchV"></span></div>
@@ -93,7 +95,7 @@ body.sim .simOnly{display:flex}
     <div class="note opt opt-breath">Follow the colours: blue is breathe in, gold is hold, violet is breathe out.</div>
     <div class="row opt opt-hum"><label for="goal">Hum goal</label><input id="goal" type="range" min="3" max="30" step="1" value="8"><span class="val" id="goalV"></span></div>
     <div class="note opt opt-hum">Breathe in, then hum as you breathe out. Hold one hum for the goal time and the lights turn fuchsia.</div>
-    <div class="note opt opt-water">Running water with the lights on. Water is also in AudioVisual, to use with anything else.</div>
+    <div class="note opt opt-water">Running water with the lights on. Every soundscape is also in AudioVisual, to use with anything else.</div>
     <div class="row opt opt-bin"><span class="lab">Beat</span><div class="modes"><button data-beat="6">Theta 6 Hz</button><button data-beat="10">Alpha 10 Hz</button></div></div>
     <div class="note opt opt-bin">Headphones only: each ear gets a slightly different tone.</div>
     <div class="row opt opt-forty"><span class="lab">40 Hz sound</span><div class="modes"><button id="shOn">Sharp</button><button id="shOff">Smooth</button></div></div>
@@ -116,11 +118,20 @@ const HEADSETS = {
 };
 let headset = 'q3';
 const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, pitch: 0.5,
-              sound: true, echo: false, toneHz: 432, toneVol: 35, water: 'off', waterVol: 50,
+              sound: false, echo: false, toneHz: 432, toneVol: 35, scape: 'off', scapeVol: 60, reach: 1,
               lights: 'sound', faces: false, jitter: 0, set: 'none', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
 // Breathing patterns, in seconds: in, hold, out, hold
 const PATTERNS = { coh: [5, 0, 5, 0], box: [4, 4, 4, 4], '478': [4, 7, 8, 0] };
 const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.65, 0.48, 1.00], COL_FUCHSIA = [1.00, 0.08, 0.78];
+// Recorded soundscapes: name shown, file, and a level trim so they sit at a similar loudness
+const SCAPES = {
+  off: ['Off'],
+  stream: ['Water stream', 'stream.mp3', 2.4], water: ['Water', 'water.mp3', 5.0],
+  waterfall: ['Waterfall', 'waterfall.mp3', 3.2], mtnfall: ['Mountain waterfall', 'mountain-waterfall.mp3', 1.2],
+  beach: ['Beach', 'beach.mp3', 1.3], forest: ['Forest', 'forest.mp3', 1.6], forestbath: ['Forest bath', 'forest-bath.mp3', 1.9],
+  field: ['Open field', 'open-field.mp3', 2.6], atmosphere: ['Atmosphere', 'atmosphere.mp3', 0.3],
+  therapy: ['Sound therapy', 'sound-therapy.mp3', 1.4], velvet: ['Velvet binaural (headphones)', 'velvet-binaural.mp3', 0.8]
+};
 const $ = id => document.getElementById(id);
 const all = sel => Array.from(document.querySelectorAll(sel));
 
@@ -250,7 +261,7 @@ const jitterReach = () => cfg.jitter / 100 * (cfg.faces ? 0.35 : 0.5);
 // With face lights on, each cube also gets a light in the middle of each of its square faces (4 lights per
 // cube where there was 1), and the block is made smaller so the total number of lights stays about the same.
 function buildGeometry() {
-  N = HEADSETS[headset].n;
+  N = Math.round(HEADSETS[headset].n * cfg.reach / 2) * 2;
   let M = N;
   if (cfg.faces) { M = Math.round(N / Math.cbrt(4)); if (M % 2) M++; }
   SIZE = M;
@@ -402,7 +413,9 @@ let micError = '';
 const TONE_PARTS = [[1, 0.6], [0.5, 0.25], [0.25, 0.08]];   // the chosen pitch, with a little of the octaves below
 const toneOscs = [];
 let droneGain = null, swellGain = null, breathG = null, pulser = null, pulseDepth = null, smoothDepth = null;
-let binL = null, binR = null, binBus = null, streamBus = null, rainBus = null;
+let binL = null, binR = null, binBus = null, scapeBus = null;
+const players = [];
+let curPlayer = 0, crossing = false;
 function startAudio() {
   if (audioCtx) return;
   const AC = window.AudioContext || window.webkitAudioContext;
@@ -478,37 +491,14 @@ function startAudio() {
   };
   binL = mkEar(-1); binR = mkEar(1);
 
-  // Water, made from shaped noise (no audio files)
-  const nb = ctx.createBuffer(1, sr * 5, sr), nd = nb.getChannelData(0);
-  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-  const noise = ctx.createBufferSource(); noise.buffer = nb; noise.loop = true; noise.start();
-  const lfo = (hz, depth, target) => {
-    const o = ctx.createOscillator(); o.frequency.value = hz;
-    const g = ctx.createGain(); g.gain.value = depth;
-    o.connect(g); g.connect(target); o.start();
-  };
-  const band = (type, f, q, gain, out) => {
-    const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q;
-    const g = ctx.createGain(); g.gain.value = gain;
-    noise.connect(b); b.connect(g); g.connect(out);
-    return [b, g];
-  };
-  // stream: a soft rush, with higher bands that wander and flutter like water over stones
-  streamBus = ctx.createGain(); streamBus.gain.value = 0; streamBus.connect(master);
-  band('lowpass', 260, 0.5, 0.5, streamBus);
-  band('bandpass', 700, 0.8, 0.45, streamBus);
-  let [b1, g1] = band('bandpass', 1600, 1.4, 0.4, streamBus);
-  lfo(0.23, 500, b1.frequency); lfo(1.7, 0.14, g1.gain); lfo(0.61, 0.1, g1.gain);
-  let [b2, g2] = band('bandpass', 2700, 2.2, 0.3, streamBus);
-  lfo(0.37, 800, b2.frequency); lfo(2.9, 0.13, g2.gain); lfo(0.83, 0.08, g2.gain);
-  let [b3, g3] = band('bandpass', 4200, 3.0, 0.16, streamBus);
-  lfo(0.51, 900, b3.frequency); lfo(4.3, 0.07, g3.gain);
-  // rain: a steady hiss with a soft low rumble
-  rainBus = ctx.createGain(); rainBus.gain.value = 0; rainBus.connect(master);
-  band('highpass', 1800, 0.4, 0.3, rainBus);
-  band('bandpass', 5200, 0.7, 0.25, rainBus);
-  let [, g4] = band('lowpass', 320, 0.5, 0.35, rainBus);
-  lfo(0.09, 0.08, g4.gain);
+  // Soundscapes: two players take turns, fading into each other, so a recording loops without a gap
+  scapeBus = ctx.createGain(); scapeBus.gain.value = 0; scapeBus.connect(master);
+  for (let i = 0; i < 2; i++) {
+    const el = new Audio(); el.preload = 'auto';
+    const g = ctx.createGain(); g.gain.value = 0;
+    ctx.createMediaElementSource(el).connect(g); g.connect(scapeBus);
+    players.push({ el, g });
+  }
 }
 function applyTone() {
   if (!audioCtx) return;
@@ -521,13 +511,52 @@ function applyTone() {
   binR.frequency.setTargetAtTime(cfg.toneHz + cfg.beat, now, 0.08);
   binBus.gain.setTargetAtTime(bin ? g * 0.6 : 0, now, 0.1);
 }
-function applyWater() {
-  all('[data-water]').forEach(b => b.classList.toggle('on', b.dataset.water === cfg.water));
+function applyScapeVol() {
   if (!audioCtx) return;
-  const now = audioCtx.currentTime, v = cfg.waterVol / 100 * 0.5;
-  streamBus.gain.setTargetAtTime(cfg.water === 'stream' ? v : 0, now, 0.4);
-  rainBus.gain.setTargetAtTime(cfg.water === 'rain' ? v : 0, now, 0.4);
+  const on = cfg.scape !== 'off';
+  scapeBus.gain.setTargetAtTime(on ? cfg.scapeVol / 100 * 0.6 * SCAPES[cfg.scape][2] : 0, audioCtx.currentTime, 0.4);
 }
+function setScape(key) {
+  cfg.scape = key;
+  $('scape').value = key;
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  crossing = false;
+  if (key === 'off') {
+    applyScapeVol();
+    setTimeout(() => { if (cfg.scape === 'off') players.forEach(p => p.el.pause()); }, 900);
+    return;
+  }
+  const url = 'sounds/' + SCAPES[key][1];
+  players.forEach((p, i) => {
+    p.el.pause(); p.el.src = url;
+    p.g.gain.cancelScheduledValues(now); p.g.gain.setValueAtTime(i === 0 ? 1 : 0, now);
+  });
+  curPlayer = 0;
+  players[0].el.play().catch(() => { scapeMsg = ' Could not play that soundscape.'; });
+  // let the second player start later without needing another tap
+  const b = players[1].el;
+  b.muted = true; b.play().then(() => { b.pause(); b.currentTime = 0; b.muted = false; }).catch(() => { b.muted = false; });
+  applyScapeVol();
+}
+let scapeMsg = '';
+// near the end of the recording, start the other player from the top and fade across
+setInterval(() => {
+  if (!audioCtx || cfg.scape === 'off' || crossing) return;
+  const a = players[curPlayer], d = a.el.duration;
+  if (!d || !isFinite(d)) return;
+  const x = Math.min(3, d / 4);
+  if (d - a.el.currentTime <= x + 0.15) {
+    const b = players[1 - curPlayer], now = audioCtx.currentTime;
+    crossing = true;
+    b.el.currentTime = 0;
+    b.el.play().catch(() => {});
+    a.g.gain.setValueAtTime(1, now); a.g.gain.linearRampToValueAtTime(0, now + x);
+    b.g.gain.setValueAtTime(0, now); b.g.gain.linearRampToValueAtTime(1, now + x);
+    const key = cfg.scape;
+    setTimeout(() => { if (cfg.scape === key && crossing) { a.el.pause(); curPlayer = 1 - curPlayer; crossing = false; } }, x * 1000 + 200);
+  }
+}, 200);
 function apply40() {
   if (!audioCtx) return;
   const now = audioCtx.currentTime, on = cfg.set === 'forty';
@@ -743,7 +772,14 @@ $('sOn').addEventListener('click', () => setSound(true));
 $('sOff').addEventListener('click', () => setSound(false));
 $('eOn').addEventListener('click', () => setEcho(true));
 $('eOff').addEventListener('click', () => setEcho(false));
-all('[data-water]').forEach(b => b.addEventListener('click', () => { cfg.water = b.dataset.water; waterBySet = false; applyWater(); }));
+Object.keys(SCAPES).forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = SCAPES[k][0]; $('scape').appendChild(o); });
+$('scape').addEventListener('change', () => { waterBySet = false; if ($('scape').value !== 'off') setSound(true); setScape($('scape').value); showPanel(); });
+all('[data-reach]').forEach(b => b.addEventListener('click', () => setReach(Number(b.dataset.reach))));
+function setReach(v) {
+  cfg.reach = v;
+  all('[data-reach]').forEach(b => b.classList.toggle('on', Number(b.dataset.reach) === v));
+  if (cloud) { buildGeometry(); setMsg = ' ' + lightCount.toLocaleString() + ' lights per block.'; }
+}
 all('[data-lights]').forEach(b => b.addEventListener('click', () => setLights(b.dataset.lights)));
 function setFaces(on) {
   cfg.faces = on;
@@ -766,19 +802,20 @@ async function setSet(name) {
   }
   const prev = cfg.set;
   cfg.set = name;
+  if (name === 'water' || name === 'bin' || name === 'forty') setSound(true);
   setStart = clock.getElapsedTime();
   setMsg = '';
   all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === name));
   all('.opt').forEach(o => { o.style.display = o.classList.contains('opt-' + name) ? (o.classList.contains('row') ? 'flex' : 'block') : 'none'; });
   // leaving a Set puts back what it changed
-  if (prev === 'water' && name !== 'water' && waterBySet) { cfg.water = 'off'; waterBySet = false; }
-  if (name === 'water' && cfg.water === 'off') { cfg.water = 'stream'; waterBySet = true; }
+  if (prev === 'water' && name !== 'water' && waterBySet) { waterBySet = false; setScape('off'); }
+  if (name === 'water' && cfg.scape === 'off') { setScape('stream'); waterBySet = true; }
   if (name === 'forty' || name === 'breath' || prev === 'forty' || prev === 'breath') { if (pulseAmps) pulseAmps.fill(0); voiceOn = false; }
   if (material && name !== 'forty') material.uniforms.uFlick.value = 1;
   if (audioCtx && name !== 'breath') breathG.gain.setTargetAtTime(1, audioCtx.currentTime, 0.3);
   humT = 0; mixNow = 0;
   $('cue').style.display = name === 'breath' ? 'block' : 'none';
-  applyWater(); applyTone(); apply40();
+  applyTone(); apply40();
 }
 all('[data-set]').forEach(b => b.addEventListener('click', () => setSet(b.dataset.set)));
 $('warnNo').addEventListener('click', () => { $('warn').style.display = 'none'; });
@@ -806,7 +843,7 @@ function readControls() {
   cfg.bpm = Number($('bpm').value); cfg.speed = Number($('spd').value);
   cfg.sens = Number($('sens').value); cfg.drift = Number($('drift').value);
   cfg.toneHz = Number($('hz').value); cfg.toneVol = Number($('tvol').value);
-  cfg.pitch = Number($('pitch').value); cfg.waterVol = Number($('wvol').value); cfg.goal = Number($('goal').value);
+  cfg.pitch = Number($('pitch').value); cfg.scapeVol = Number($('wvol').value); cfg.goal = Number($('goal').value);
   $('bpmV').textContent = cfg.bpm + ' BPM';
   $('spdV').textContent = cfg.speed.toFixed(1) + ' m/s';
   $('sensV').textContent = cfg.sens + ' / 10';
@@ -814,14 +851,15 @@ function readControls() {
   $('hzV').textContent = cfg.toneHz + ' Hz';
   $('tvolV').textContent = cfg.toneVol + '%';
   $('pitchV').textContent = cfg.pitch.toFixed(2) + ' m';
-  $('wvolV').textContent = cfg.waterVol + '%';
+  $('wvolV').textContent = cfg.scapeVol + '%';
   $('goalV').textContent = cfg.goal + ' s';
   cfg.jitter = Number($('jit').value);
   $('jitV').textContent = cfg.jitter + '%';
-  applyTone(); applyWater();
+  applyTone(); applyScapeVol();
 }
 ['bpm', 'spd', 'sens', 'drift', 'hz', 'tvol', 'pitch', 'wvol', 'goal', 'jit'].forEach(id => $(id).addEventListener('input', readControls));
-function nudgeHz(by) { const el = $('hz'); el.value = Math.max(40, Math.min(1000, Number(el.value) + by)); readControls(); showPanel(); }
+['hz', 'tvol', 'wvol'].forEach(id => $(id).addEventListener('input', () => setSound(true)));
+function nudgeHz(by) { setSound(true); const el = $('hz'); el.value = Math.max(40, Math.min(1000, Number(el.value) + by)); readControls(); showPanel(); }
 $('hzDn').addEventListener('click', () => nudgeHz(-1));
 $('hzUp').addEventListener('click', () => nudgeHz(1));
 
@@ -861,9 +899,9 @@ all('[data-dev]').forEach(b => b.addEventListener('click', () => setDevice(b.dat
 (async () => {
   try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
 })();
-readControls(); setSound(true); setEcho(false); setSharp(true); setLights('sound'); setFaces(false); setPattern('coh'); setBeat(6);
+readControls(); setSound(false); setEcho(false); setSharp(true); setLights('sound'); setFaces(false); setPattern('coh'); setBeat(6);
 all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === 'none'));
-applyWater();
+setReach(1);
 
 $('go').addEventListener('click', async () => {
   startAudio();                                   // must begin inside the tap
@@ -1061,7 +1099,8 @@ renderer.setAnimationLoop((ms, frame) => {
 window.pulseLattice = {
   touch: (x, y, z) => touchAt(cam.x + x, cam.y + y, cam.z + z, clock.getElapsedTime()),
   near: (x, y, z) => Array.from(nearestLight(x, y, z)),
-  state: () => ({ lightCount, size: SIZE, faces: cfg.faces, set: cfg.set, mode: cfg.mode, lights: cfg.lights, water: cfg.water, humT, mix: mixNow, rest: material ? material.uniforms.uRest.value : 0, col: colNow.slice(), fps })
+  seekEnd: () => { const p = players[curPlayer].el; p.currentTime = Math.max(0, p.duration - 4.5); },
+  state: () => ({ lightCount, size: SIZE, faces: cfg.faces, set: cfg.set, mode: cfg.mode, lights: cfg.lights, water: cfg.scape, playing: players.map(p => [!p.el.paused, +p.el.currentTime.toFixed(1), +p.g.gain.value.toFixed(2)]), humT, mix: mixNow, rest: material ? material.uniforms.uRest.value : 0, col: colNow.slice(), fps })
 };
 </script>
 </body>

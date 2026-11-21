@@ -32,13 +32,14 @@ body.sim .simOnly{display:flex}
 <div id="start">
   <h1>PULSE LATTICE</h1>
   <p>A lattice of lights that never ends, dark until your voice wakes it. Turn and tilt your phone to look around. You drift the way you face: touch and hold to travel faster.</p>
-  <p>Headphones make it feel much bigger. Allow the microphone when asked: your voice is only used live on this phone. Nothing is recorded or sent.</p>
+  <p>Headphones make it feel much bigger, and let you switch on the echo of your own voice. Allow the microphone when asked: your voice is only used live on this phone. Nothing is recorded or sent.</p>
   <button id="go">Enter</button>
 </div>
 <div id="panel">
   <div class="rows">
     <div class="row"><span class="lab">Source</span><div class="modes"><button id="mVoice">Voice</button><button id="mSim">Simulated pulse</button></div></div>
     <div class="row"><span class="lab">Sound</span><div class="modes"><button id="sOn">On</button><button id="sOff">Off</button></div></div>
+    <div class="row voiceOnly"><span class="lab">Voice echo</span><div class="modes"><button id="eOn">On (headphones)</button><button id="eOff">Off</button></div></div>
     <div class="row voiceOnly"><span class="lab">Voice level</span><div id="meter"><div id="meterFill"></div></div><span class="val" id="lvlV"></span></div>
     <div class="row voiceOnly"><label for="sens">Sensitivity</label><input id="sens" type="range" min="1" max="10" step="1" value="6"><span class="val" id="sensV"></span></div>
     <div class="row simOnly"><label for="bpm">Pulse</label><input id="bpm" type="range" min="30" max="140" step="1" value="60"><span class="val" id="bpmV"></span></div>
@@ -57,7 +58,7 @@ import * as THREE from 'three';
 const N = 50;            // nodes per axis in one repeating block, 1 m apart
 const PITCH = 1.0;
 const SLOTS = 40;        // max simultaneous wave rings
-const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, sound: true };
+const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, sound: true, echo: false };
 
 // ---- Lattice ----
 const HALF = (N - 1) * PITCH / 2;
@@ -347,7 +348,7 @@ addEventListener('pointermove', e => {
 });
 
 // ---- Sound: a low drone, and your voice returned as a long distant echo ----
-let audioCtx = null, master = null, micIn = null, analyser = null, buf = null;
+let audioCtx = null, master = null, micIn = null, echoGate = null, analyser = null, buf = null;
 let micError = '';
 function startAudio() {
   if (audioCtx) return;
@@ -384,12 +385,14 @@ function startAudio() {
   micIn = ctx.createGain();
   const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 160;
   const pre = ctx.createDelay(1.0); pre.delayTime.value = 0.32;
-  micIn.connect(hp); hp.connect(pre); pre.connect(verb);
+  echoGate = ctx.createGain();
+  echoGate.gain.value = 0;        // off unless switched on: through a speaker it feeds back into the mic
+  micIn.connect(hp); hp.connect(pre); pre.connect(echoGate); echoGate.connect(verb);
 
-  // drone: a few low tones beating slowly against each other
+  // drone: 432 Hz with its lower octaves (216 and 108 Hz), beating slowly against near-twins
   const drone = ctx.createGain();
-  drone.gain.value = 0.11;
-  [[55.0, 0.5], [55.31, 0.5], [82.4, 0.3], [110.2, 0.22], [164.9, 0.10], [220.6, 0.05]].forEach(([f, g]) => {
+  drone.gain.value = 0.10;
+  [[108.0, 0.5], [108.3, 0.45], [216.0, 0.32], [216.45, 0.22], [432.0, 0.12], [432.6, 0.07]].forEach(([f, g]) => {
     const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
     const og = ctx.createGain(); og.gain.value = g;
     o.connect(og); og.connect(drone); o.start();
@@ -411,6 +414,12 @@ function startAudio() {
   const airLA = ctx.createGain(); airLA.gain.value = 0.008;
   airL.connect(airLA); airLA.connect(airG.gain); airL.start();
   air.connect(bp); bp.connect(airG); airG.connect(master); air.start();
+}
+function setEcho(on) {
+  cfg.echo = on;
+  $('eOn').classList.toggle('on', on);
+  $('eOff').classList.toggle('on', !on);
+  if (echoGate) echoGate.gain.setTargetAtTime(on ? 1 : 0, audioCtx.currentTime, 0.2);
 }
 function setSound(on) {
   cfg.sound = on;
@@ -509,6 +518,8 @@ $('mVoice').addEventListener('click', async () => {
 });
 $('sOn').addEventListener('click', () => setSound(true));
 $('sOff').addEventListener('click', () => setSound(false));
+$('eOn').addEventListener('click', () => setEcho(true));
+$('eOff').addEventListener('click', () => setEcho(false));
 function readControls() {
   cfg.bpm = Number($('bpm').value);
   cfg.speed = Number($('spd').value);
@@ -522,6 +533,7 @@ function readControls() {
 ['bpm', 'spd', 'sens', 'drift'].forEach(id => $(id).addEventListener('input', readControls));
 readControls();
 setSound(true);
+setEcho(false);
 
 // ---- Start ----
 $('go').addEventListener('click', async () => {

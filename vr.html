@@ -31,7 +31,8 @@ canvas{display:block}
 #meter{flex:1;height:8px;border-radius:4px;background:#12202c;overflow:hidden}
 #meterFill{height:100%;width:0;background:#9fd8ff}
 .step{width:32px;height:28px;border-radius:14px;border:1px solid #35607f;background:transparent;color:#9fd8ff;font-size:16px;line-height:1;padding:0;flex:none}
-.opt{display:none}
+.opt,.phoneOnly{display:none}
+body[data-device="phone"] .phoneOnly{display:flex}
 body[data-active="pulse"] .opt-pulse:not(.voiceOnly):not(.simOnly),
 body[data-active="pulse"].voice .opt-pulse.voiceOnly,
 body[data-active="pulse"].sim .opt-pulse.simOnly,
@@ -70,6 +71,7 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
   <div class="modes" id="tabs"><button data-tab="av">Display</button><button data-tab="ar">Array</button><button data-tab="sets">Sets</button></div>
 
   <div class="sec" id="sec-av">
+    <div class="row phoneOnly"><span class="lab">Look by</span><div class="modes"><button data-look="motion">Moving phone</button><button data-look="swipe">Swiping</button></div></div>
     <div class="row"><span class="lab">Background</span><div class="modes"><button data-bg="space">Space</button><button data-bg="colour">Colour</button></div><input type="color" id="bgCol" value="#0b1a33"></div>
     <div class="row"><span class="lab">Galaxies</span><div class="modes"><button data-deep="on">On</button><button data-deep="off">Off</button></div></div>
     <div class="row"><span class="lab">Light colour</span><div class="modes"><button data-lt="natural">Natural</button><button data-lt="colour">Colour</button><button data-lt="multi">Multi</button></div><input type="color" id="ltCol" value="#66ccff"></div>
@@ -128,7 +130,7 @@ const HEADSETS = {
 let headset = 'q3';
 const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, pitch: 0.5,
               sound: false, echo: false, toneHz: 432, toneVol: 0, scape: 'off', scapeVol: 60, reach: 1,
-              lights: 'always', faces: false, jitter: 0, set: 'pulse', bg: 'space', light: 'natural', deep: true, fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
+              lights: 'always', faces: false, jitter: 0, set: 'pulse', bg: 'space', light: 'natural', deep: true, look: 'motion', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
 // Breathing patterns, in seconds: in, hold, out, hold
 const PATTERNS = { coh: [5, 0, 5, 0], box: [4, 4, 4, 4], '478': [4, 7, 8, 0] };
 const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.65, 0.48, 1.00], COL_FUCHSIA = [1.00, 0.08, 0.78];
@@ -974,7 +976,11 @@ addEventListener('pointercancel', () => { dragging = false; holding = false; });
 addEventListener('pointermove', e => {
   if (!dragging) return;
   moved += Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly);
-  if (!sensor) {
+  if (device === 'phone' && cfg.look === 'swipe') {
+    // swipe right to look right, swipe up to look up
+    yaw -= (e.clientX - lx) * 0.006;
+    pitch = Math.max(-1.5, Math.min(1.5, pitch - (e.clientY - ly) * 0.006));
+  } else if (!sensor) {
     yaw += (e.clientX - lx) * 0.005;
     pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - ly) * 0.005));
   }
@@ -1016,6 +1022,13 @@ function setReach(v) {
 }
 all('[data-lights]').forEach(b => b.addEventListener('click', () => setLights(b.dataset.lights)));
 all('[data-bg]').forEach(b => b.addEventListener('click', () => setBackground(b.dataset.bg)));
+function setLook(v) {
+  // when leaving motion control, carry on looking the same way you were
+  if (v === 'swipe' && cfg.look !== 'swipe' && sensor) { euler.setFromQuaternion(camera.quaternion, 'YXZ'); yaw = euler.y; pitch = Math.max(-1.5, Math.min(1.5, euler.x)); }
+  cfg.look = v;
+  all('[data-look]').forEach(b => b.classList.toggle('on', b.dataset.look === v));
+}
+all('[data-look]').forEach(b => b.addEventListener('click', () => setLook(b.dataset.look)));
 function setDeep(on) { cfg.deep = on; all('[data-deep]').forEach(b => b.classList.toggle('on', (b.dataset.deep === 'on') === on)); }
 all('[data-deep]').forEach(b => b.addEventListener('click', () => setDeep(b.dataset.deep === 'on')));
 $('bgCol').addEventListener('input', () => setBackground('colour'));
@@ -1130,6 +1143,7 @@ function setDevice(d) {
   $('hsRow').style.display = d === 'vr' ? 'flex' : 'none';
   $('intro').textContent = INTRO[d];
   autoHide = d === 'phone';
+  document.body.dataset.device = d;
 }
 all('[data-dev]').forEach(b => b.addEventListener('click', () => setDevice(b.dataset.dev)));
 {
@@ -1139,7 +1153,7 @@ all('[data-dev]').forEach(b => b.addEventListener('click', () => setDevice(b.dat
 (async () => {
   try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
 })();
-readControls(); setSound(false); setEcho(false); setSharp(true); setLights('always'); setDeep(true); setBackground('space'); setLightColour('natural'); setFaces(true); setPattern('coh'); setBeat(6);
+readControls(); setSound(false); setEcho(false); setSharp(true); setLights('always'); setLook('motion'); setDeep(true); setBackground('space'); setLightColour('natural'); setFaces(true); setPattern('coh'); setBeat(6);
 all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === 'pulse'));
 document.body.dataset.active = 'pulse';
 setReach(1);
@@ -1174,7 +1188,8 @@ $('go').addEventListener('click', async () => {
         ? 'Set things up here, then press Enter VR. In VR: right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. The A button turns 40+40 on and off once you have accepted its warning here.'
         : 'This browser cannot start VR. Open this page in the headset\'s own browser. Until then this is a preview: drag to look.');
     } else if (device === 'phone') {
-      lookMsg = (sensorEvents > 0 ? 'Motion sensors on.' : 'No motion sensor data: drag to look.') + ' Tap the screen to show or hide the menus.';
+      lookMsg = (sensorEvents > 0 ? 'Motion sensors on. To look around without moving the phone, choose Display, Look by, Swiping.' : 'No motion sensor data: swipe to look.') + ' Tap the screen to show or hide the menus.';
+      if (sensorEvents === 0) setLook('swipe');
     } else {
       lookMsg = 'Drag to look. Click and hold to travel faster.';
     }
@@ -1247,7 +1262,7 @@ renderer.setAnimationLoop((ms, frame) => {
     for (; hi < 2; hi++) hands[hi].set(0, -99, 0);
   } else {
     head.set(0, 0, 0);
-    if (sensor) applySensor(); else camera.rotation.set(pitch, yaw, 0, 'YXZ');
+    if (sensor && cfg.look === 'motion') applySensor(); else camera.rotation.set(pitch, yaw, 0, 'YXZ');
     camera.getWorldDirection(fwd);
   }
   if (aNow && !aWas && fortyAccepted) setSet(set === 'forty' ? 'pulse' : 'forty');
@@ -1295,7 +1310,7 @@ renderer.setAnimationLoop((ms, frame) => {
 
   // travel: a slow drift the way you face; touch and hold (phone) or thumbstick (VR) changes speed
   boostAxis += (stick - boostAxis) * Math.min(1, dt * 3);
-  boostHold += ((holding ? 1 : 0) - boostHold) * Math.min(1, dt * 3);
+  boostHold += ((holding && moved < 14 ? 1 : 0) - boostHold) * Math.min(1, dt * 3);
   const v = Math.max(0, cfg.drift + boostAxis * 6 + boostHold * 4);
   drift.copy(fwd);
   cam.x += fwd.x * v * dt; cam.y += fwd.y * v * dt; cam.z += fwd.z * v * dt;
@@ -1345,6 +1360,7 @@ window.pulseLattice = {
   touch: (x, y, z) => touchAt(cam.x + x, cam.y + y, cam.z + z, clock.getElapsedTime()),
   near: (x, y, z) => Array.from(nearestLight(x, y, z)),
   hideLattice: v => { cloud.visible = !v; },
+  dir: () => { const v = new THREE.Vector3(); camera.getWorldDirection(v); return [v.x, v.y, v.z]; },
   goto: (x, y, z) => { cam.x = x; cam.y = y; cam.z = z; },
   look: (yawDeg, pitchDeg) => { yaw = yawDeg * Math.PI / 180; pitch = pitchDeg * Math.PI / 180; },
   seekEnd: () => { const p = players[curPlayer].el; p.currentTime = Math.max(0, p.duration - 4.5); },

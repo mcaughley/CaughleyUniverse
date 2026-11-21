@@ -334,7 +334,9 @@ const galaxyMats = [];
 
   // Photographs of real nebulae and galaxies, as landmarks. Each appears twice, far apart, and always faces you.
   const PHOTOS = [['nebula', 984, 717], ['spiral-a', 1024, 728], ['merging', 1024, 752], ['spiral-b', 1024, 783],
-                  ['disc', 1024, 638], ['jet', 1024, 1024], ['spiral-c', 1024, 768], ['starburst', 1024, 819]];
+                  ['disc', 1024, 638], ['jet', 1024, 1024], ['spiral-c', 1024, 768], ['starburst', 1024, 819],
+                  ['twin-jet', 900, 685], ['violet-cloud', 900, 600], ['helix-knots', 1024, 742], ['cliffs', 1024, 593],
+                  ['whirlpool', 1024, 711], ['helix', 1024, 1024], ['pillars', 592, 1024]];
   const loader = new THREE.TextureLoader();
   const place = (name, w, hgt, x, y, z, size) => {
     const mat = new THREE.MeshBasicMaterial({ map: loader.load('sky/' + name + '.jpg'), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
@@ -345,7 +347,8 @@ const galaxyMats = [];
     deepObjs.push({ m, x, y, z, bright: 1.0, face: true, roll: (rnd() - 0.5) * 1.2 });
   };
   // the first of each is laid out around where you start, so some are in view straight away
-  const NEAR = [[0, 30, -170], [190, -40, -90], [-200, 60, 40], [80, 120, 180], [-110, -90, -220], [240, 20, 150], [-60, 170, -60], [30, -150, 120]];
+  const NEAR = [[0, 30, -170], [190, -40, -90], [-200, 60, 40], [80, 120, 180], [-110, -90, -220], [240, 20, 150], [-60, 170, -60], [30, -150, 120],
+                [-150, -20, -110], [130, 140, -200], [-250, -110, 120], [260, 130, -30], [-40, 60, 250], [150, -160, -160], [-190, 150, -190]];
   PHOTOS.forEach(([name, w, hgt], i) => {
     const n = NEAR[i];
     place(name, w, hgt, (n[0] + DEEP) % DEEP, (n[1] + DEEP) % DEEP, (n[2] + DEEP) % DEEP, 95 + rnd() * 40);

@@ -28,3 +28,11 @@ Original file names, which carry the creators' names:
 
 The images in `sky/` were supplied by the project owner and have been resized and edge-faded for use in the scene.
 They appear to be space-agency composite images; source and credit lines are to be confirmed by the owner.
+
+Credits known so far, from NASA's own pages:
+
+- pillars, cliffs, helix-knots: NASA, ESA, CSA, STScI
+- whirlpool: NASA, ESA, S. Beckwith (STScI), and the Hubble Heritage Team (STScI/AURA)
+- helix: NASA, NOAO, ESA, the Hubble Helix Nebula Team, M. Meixner (STScI), and T.A. Rector (NRAO)
+
+The remaining images are still to be confirmed.

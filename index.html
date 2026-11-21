@@ -1001,9 +1001,9 @@ addEventListener('pointermove', e => {
   if (!dragging) return;
   moved += Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly);
   if (device === 'phone' && cfg.look === 'swipe') {
-    // swipe right to look right, swipe up to look up
-    yaw -= (e.clientX - lx) * 0.006;
-    pitch = Math.max(-1.5, Math.min(1.5, pitch - (e.clientY - ly) * 0.006));
+    // like dragging a map or globe: the view follows your finger
+    yaw += (e.clientX - lx) * 0.006;
+    pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - ly) * 0.006));
   } else if (!sensor) {
     yaw += (e.clientX - lx) * 0.005;
     pitch = Math.max(-1.5, Math.min(1.5, pitch + (e.clientY - ly) * 0.005));

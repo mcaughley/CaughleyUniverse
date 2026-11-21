@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Pulse Lattice</title>
+<title>Caughley Universe</title>
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif;color:#9fd8ff;touch-action:none;-webkit-user-select:none;user-select:none}
 canvas{display:block}
@@ -47,8 +47,8 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
 </head>
 <body class="sim">
 <div id="start">
-  <h1>PULSE LATTICE</h1>
-  <p id="intro">A lattice of lights that never ends, dark until your voice wakes it. Swipe to look around. You drift the way you face: touch and hold to travel faster.</p>
+  <h1>CAUGHLEY UNIVERSE</h1>
+  <p id="intro">A universe of lights that never ends, with waves of light that answer your voice. Swipe to look around. You drift the way you face: touch and hold to travel faster.</p>
   <div class="modes" id="devRow" style="max-width:420px;width:100%;flex:none">
     <button data-dev="phone">Phone</button><button data-dev="pc">PC</button><button data-dev="vr">VR</button>
   </div>
@@ -1186,9 +1186,9 @@ const clock = new THREE.Clock();
 // ---- Phone, PC or VR: chosen on the start screen (the page guesses, you can change it) ----
 let device = 'pc';
 const INTRO = {
-  phone: 'A lattice of lights that never ends, dark until your voice wakes it. Swipe to look around. You drift the way you face: touch and hold to travel faster.',
-  pc: 'A lattice of lights that never ends, dark until your voice wakes it. Drag to look around. You drift the way you face: click and hold to travel faster.',
-  vr: 'A lattice of lights that never ends, dark until your voice wakes it. Choose your headset, then Enter. Set things up on the next screen, then press Enter VR.'
+  phone: 'A universe of lights that never ends, with waves of light that answer your voice. Swipe to look around. You drift the way you face: touch and hold to travel faster.',
+  pc: 'A universe of lights that never ends, with waves of light that answer your voice. Drag to look around. You drift the way you face: click and hold to travel faster.',
+  vr: 'A universe of lights that never ends, with waves of light that answer your voice. Choose your headset, then Enter. Set things up on the next screen, then press Enter VR.'
 };
 function setDevice(d) {
   device = d;

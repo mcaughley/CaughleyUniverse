@@ -255,11 +255,26 @@ const starMat = new THREE.ShaderMaterial({
     C: ['01110', '10001', '10000', '10000', '10000', '10001', '01110'],
     L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
     T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
-    K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001']
+    K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
+    W: ['10001', '10001', '10001', '10101', '10101', '11011', '10001'],
+    E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+    O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
+    V: ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
+    Y: ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
+    U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
+    A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
+    N: ['10001', '11001', '10101', '10011', '10001', '10001', '10001'],
+    D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
+    F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
+    R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+    G: ['01110', '10001', '10000', '10111', '10001', '10001', '01111'],
+    I: ['01110', '00100', '00100', '00100', '00100', '00100', '01110'],
+    "'": ['00100', '00100', '01000', '00000', '00000', '00000', '00000'],
+    ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000']
   };
   const CELL = 0.4 * Math.PI / 180, dots = [];
   // az: degrees round to your left from where you first face; el: degrees above (+) or below (-) the horizon
-  function writeStars(text, azDeg, elDeg) {
+  function writeStars(text, azDeg, elDeg, line = 0) {      // line: 0 is the top line, 1 the next one down, and so on
     const AZ = azDeg * Math.PI / 180, EL = elDeg * Math.PI / 180;
     const fw = [-Math.sin(AZ) * Math.cos(EL), Math.sin(EL), -Math.cos(AZ) * Math.cos(EL)];
     const rt = [Math.cos(AZ), 0, -Math.sin(AZ)];
@@ -270,7 +285,7 @@ const starMat = new THREE.ShaderMaterial({
         if (g[row][col] !== '1') continue;
         // a little unevenness, so it reads as stars that happen to line up
         const x = (ci * 6 + col - (text.length * 6 - 1) / 2 + (Math.random() - 0.5) * 0.3) * CELL;
-        const y = (3 - row + (Math.random() - 0.5) * 0.3) * CELL;
+        const y = (3 - row - line * 10 + (Math.random() - 0.5) * 0.3) * CELL;
         const d = [fw[0] + rt[0] * x + up[0] * y, fw[1] + rt[1] * x + up[1] * y, fw[2] + rt[2] * x + up[2] * y];
         const len = Math.hypot(d[0], d[1], d[2]);
         dots.push([d[0] / len * 140, d[1] / len * 140, d[2] / len * 140]);
@@ -280,6 +295,8 @@ const starMat = new THREE.ShaderMaterial({
   writeStars('BPMC', 140, 30);       // behind your right shoulder, a little above the horizon
   writeStars('CLTC', 250, -25);      // round to your right, below the horizon
   writeStars('MKBC', 20, 55);        // high up, just left of straight ahead
+  // a message, in three lines, high up behind you
+  ["WE LOVE YOU", "AND DON'T YOU", "FORGET IT"].forEach((t, i) => writeStars(t, 200, 52, i));
   const TOTAL = STARS + dots.length;
   const sPos = new Float32Array(TOTAL * 3), sSize = new Float32Array(TOTAL), sSeed = new Float32Array(TOTAL);
   dots.forEach((d, i) => {

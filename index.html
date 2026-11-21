@@ -11,6 +11,9 @@ canvas{display:block}
 #start h1{font-weight:200;letter-spacing:.3em;font-size:20px;margin:0}
 #start p{margin:0;max-width:300px;font-size:14px;line-height:1.5;color:#6f9fc4}
 #go{font-size:17px;padding:14px 34px;border-radius:30px;border:1px solid #9fd8ff;background:transparent;color:#9fd8ff}
+#warn{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(0,0,0,.92);z-index:20;text-align:center;padding:24px}
+#warn h1{font-weight:200;letter-spacing:.3em;font-size:20px;margin:0}
+#warn p{margin:0;max-width:300px;font-size:14px;line-height:1.5;color:#9fbfd8}
 #panel{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(0,0,0,.5);font-size:13px;display:none;transition:opacity .8s}
 #panel.away{opacity:0;pointer-events:none}
 .row{display:flex;align-items:center;gap:10px;margin:6px 0}
@@ -36,10 +39,18 @@ body.sim .simOnly{display:flex}
   <p>Headphones make it feel much bigger, and let you switch on the echo of your own voice. Allow the microphone when asked: your voice is only used live on this phone. Nothing is recorded or sent.</p>
   <button id="go">Enter</button>
 </div>
+<div id="warn">
+  <h1>40+40</h1>
+  <p>This pulses the lights and the tone 40 times a second.</p>
+  <p>Do not use it if you, or anyone who can see the screen, has epilepsy or is sensitive to flashing light. Stop if you feel unwell.</p>
+  <p>It is an art effect. It is not a medical device or a treatment.</p>
+  <div class="modes" style="max-width:300px;width:100%"><button id="warnNo">Cancel</button><button id="warnYes" class="on">Start</button></div>
+</div>
 <div id="panel">
   <div class="rows">
     <div class="row"><span class="lab">Source</span><div class="modes"><button id="mVoice">Voice</button><button id="mSim">Simulated pulse</button></div></div>
     <div class="row"><span class="lab">Sound</span><div class="modes"><button id="sOn">On</button><button id="sOff">Off</button></div></div>
+    <div class="row"><span class="lab">40+40</span><div class="modes"><button id="fOn">On</button><button id="fOff">Off</button></div></div>
     <div class="row"><label for="hz">Tone</label><button class="step" id="hzDn">&minus;</button><input id="hz" type="range" min="40" max="1000" step="1" value="432"><button class="step" id="hzUp">+</button><span class="val" id="hzV"></span></div>
     <div class="row"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="35"><span class="val" id="tvolV"></span></div>
     <div class="row voiceOnly"><span class="lab">Voice echo</span><div class="modes"><button id="eOn">On (headphones)</button><button id="eOff">Off</button></div></div>
@@ -61,7 +72,7 @@ import * as THREE from 'three';
 const N = 50;            // nodes per axis in one repeating block, 1 m apart
 const PITCH = 1.0;
 const SLOTS = 40;        // max simultaneous wave rings
-const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, sound: true, echo: false, toneHz: 432, toneVol: 35 };
+const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, sound: true, echo: false, toneHz: 432, toneVol: 35, forty: false };
 
 // ---- Lattice ----
 const HALF = (N - 1) * PITCH / 2;
@@ -107,9 +118,13 @@ const material = new THREE.ShaderMaterial({
     uWidth: { value: cfg.width },
     uEmber: { value: cfg.ember },
     uLevel: { value: 0 },
+    uRest: { value: 0 },
+    uFlick: { value: 1 },
     uScale: { value: 30 }
   },
   vertexShader: `
+    uniform float uRest;
+    uniform float uFlick;
     uniform float uTime;
     uniform float uPulseT[${SLOTS}];
     uniform float uPulseA[${SLOTS}];
@@ -143,6 +158,7 @@ const material = new THREE.ShaderMaterial({
         }
       }
       g += 0.3 * uLevel * exp(-d / 5.0);
+      g = (g + uRest) * uFlick;       // 40+40: a low steady glow, pulsed 40 times a second
       vGlow = clamp(g, 0.0, 1.4);
       // dimmer with distance, and gone before the repeat boundary
       vAtt = (1.0 - smoothstep(15.0, 24.5, d)) / (1.0 + d * d / 260.0);
@@ -407,9 +423,14 @@ function startAudio() {
   const swellAmt = ctx.createGain(); swellAmt.gain.value = drone.gain.value * 0.4;
   swellGain = swellAmt;
   swell.connect(swellAmt); swellAmt.connect(drone.gain); swell.start();
-  drone.connect(master);
+  // 40+40: the tone can be switched on and off 40 times a second
+  pulser = ctx.createGain(); pulser.gain.value = 1;
+  const lfo40 = ctx.createOscillator(); lfo40.type = 'sine'; lfo40.frequency.value = 40;
+  pulseDepth = ctx.createGain(); pulseDepth.gain.value = 0;
+  lfo40.connect(pulseDepth); pulseDepth.connect(pulser.gain); lfo40.start();
+  drone.connect(pulser); pulser.connect(master);
   const droneSend = ctx.createGain(); droneSend.gain.value = 0.25;
-  drone.connect(droneSend); droneSend.connect(verb);
+  pulser.connect(droneSend); droneSend.connect(verb);
 
   // a faint breath of air that comes and goes
   const nb = ctx.createBuffer(1, sr * 4, sr), nd = nb.getChannelData(0);
@@ -422,9 +443,9 @@ function startAudio() {
   airL.connect(airLA); airLA.connect(airG.gain); airL.start();
   air.connect(bp); bp.connect(airG); airG.connect(master); air.start();
 }
-const TONE_PARTS = [[0.25, 0.5], [0.25 * 1.0028, 0.45], [0.5, 0.32], [0.5 * 1.0021, 0.22], [1, 0.12], [1.0014, 0.07]];
+const TONE_PARTS = [[0.25, 0.35], [0.25 * 1.0028, 0.3], [0.5, 0.3], [0.5 * 1.0021, 0.2], [1, 0.28], [1.0014, 0.16]];
 const toneOscs = [];
-let droneGain = null, swellGain = null;
+let droneGain = null, swellGain = null, pulser = null, pulseDepth = null;
 function applyTone() {
   if (!audioCtx) return;
   const now = audioCtx.currentTime;
@@ -433,6 +454,25 @@ function applyTone() {
   droneGain.gain.setTargetAtTime(g, now, 0.1);
   swellGain.gain.setTargetAtTime(g * 0.4, now, 0.1);
 }
+// ---- 40+40: light and sound pulsed 40 times a second ----
+let fps = 60, lightOK = false;
+function setForty(on) {
+  cfg.forty = on;
+  $('fOn').classList.toggle('on', on);
+  $('fOff').classList.toggle('on', !on);
+  if (audioCtx) {
+    const now = audioCtx.currentTime;
+    // gain swings between 0 and 1 at 40 Hz when on; steady 1 when off
+    pulser.gain.setTargetAtTime(on ? 0.5 : 1, now, 0.05);
+    pulseDepth.gain.setTargetAtTime(on ? 0.5 : 0, now, 0.05);
+  }
+  material.uniforms.uRest.value = on ? 0.22 : 0;
+  if (!on) material.uniforms.uFlick.value = 1;
+  fortyMsg = !on ? '' : (lightOK
+    ? ' 40+40 on: light and sound at 40 Hz.'
+    : ' 40+40 on: sound at 40 Hz. The light pulse needs a 120 Hz screen (this one is running at ' + Math.round(fps) + ').');
+}
+let fortyMsg = '';
 function setEcho(on) {
   cfg.echo = on;
   $('eOn').classList.toggle('on', on);
@@ -529,13 +569,17 @@ function setMode(m) {
   pulseAmps.fill(0);
   voiceOn = false; smooth = 0; level = 0;
 }
-$('mSim').addEventListener('click', () => { setMode('sim'); statusEl.textContent = lookMsg; });
+$('mSim').addEventListener('click', () => { setMode('sim'); statusEl.textContent = lookMsg + fortyMsg; });
 $('mVoice').addEventListener('click', async () => {
   if (await startMic()) setMode('voice');
   else statusEl.textContent = 'Microphone not available (' + micError + '). Allow it for this site in Chrome, then tap Voice again.';
 });
 $('sOn').addEventListener('click', () => setSound(true));
 $('sOff').addEventListener('click', () => setSound(false));
+$('fOn').addEventListener('click', () => { if (!cfg.forty) $('warn').style.display = 'flex'; });
+$('fOff').addEventListener('click', () => { setForty(false); if (cfg.mode === 'sim') statusEl.textContent = lookMsg; });
+$('warnNo').addEventListener('click', () => { $('warn').style.display = 'none'; });
+$('warnYes').addEventListener('click', () => { $('warn').style.display = 'none'; lightOK = fps > 110 && fps < 130; setForty(true); showPanel(); if (cfg.mode === 'sim') statusEl.textContent = lookMsg + fortyMsg; });
 $('eOn').addEventListener('click', () => setEcho(true));
 $('eOff').addEventListener('click', () => setEcho(false));
 function readControls() {
@@ -560,6 +604,13 @@ $('hzUp').addEventListener('click', () => nudgeHz(1));
 readControls();
 setSound(true);
 setEcho(false);
+setForty(false);
+
+// A copy left open in another tab must not keep droning: go quiet whenever this page is hidden.
+document.addEventListener('visibilitychange', () => {
+  if (!audioCtx) return;
+  if (document.hidden) audioCtx.suspend(); else audioCtx.resume();
+});
 
 // ---- Start ----
 $('go').addEventListener('click', async () => {
@@ -592,8 +643,16 @@ const clock = new THREE.Clock();
 const fwd = new THREE.Vector3();
 let lastT = 0, uiTimer = 0;
 const meterFill = $('meterFill'), lvlV = $('lvlV');
-renderer.setAnimationLoop(() => {
+let lastFrame = 0;
+renderer.setAnimationLoop((ms) => {
   const t = clock.getElapsedTime();
+  if (lastFrame) { const f = 1000 / Math.max(1, ms - lastFrame); fps += (f - fps) * 0.05; }
+  lastFrame = ms;
+  if (cfg.forty && lightOK) {
+    // on a 120 Hz screen, 40 Hz is exactly 3 frames: one bright, two dimmer
+    const k = Math.round(ms / (1000 / 120)) % 3;
+    material.uniforms.uFlick.value = k === 0 ? 1.0 : 0.45;
+  }
   if (cfg.mode === 'voice') driveVoice(t); else driveSim(t);
   const lvl = cfg.mode === 'voice' ? smooth : 0;
   material.uniforms.uTime.value = t;
@@ -624,7 +683,7 @@ renderer.setAnimationLoop(() => {
     if (analyser && started) {
       statusEl.textContent = silentFor >= 3
         ? 'The microphone is sending silence. Another app may be using it (a screen recorder or a call). Close that, then reload.'
-        : lookMsg + ' Mic in ' + Math.round(inDb) + ' dB, room ' + Math.round(floorDb) + ' dB.';
+        : lookMsg + ' Mic in ' + Math.round(inDb) + ' dB, room ' + Math.round(floorDb) + ' dB.' + fortyMsg;
     }
   }
 });

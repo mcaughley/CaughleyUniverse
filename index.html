@@ -71,10 +71,11 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
 
   <div class="sec" id="sec-av">
     <div class="row"><span class="lab">Background</span><div class="modes"><button data-bg="space">Space</button><button data-bg="colour">Colour</button></div><input type="color" id="bgCol" value="#0b1a33"></div>
+    <div class="row"><span class="lab">Galaxies</span><div class="modes"><button data-deep="on">On</button><button data-deep="off">Off</button></div></div>
     <div class="row"><span class="lab">Light colour</span><div class="modes"><button data-lt="natural">Natural</button><button data-lt="colour">Colour</button><button data-lt="multi">Multi</button></div><input type="color" id="ltCol" value="#66ccff"></div>
     <div class="row"><span class="lab">Sound</span><div class="modes"><button id="sOn">On</button><button id="sOff">Off</button></div></div>
     <div class="row"><label for="hz">Tone</label><button class="step" id="hzDn">&minus;</button><input id="hz" type="range" min="40" max="1000" step="1" value="432"><button class="step" id="hzUp">+</button><span class="val" id="hzV"></span></div>
-    <div class="row"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="35"><span class="val" id="tvolV"></span></div>
+    <div class="row"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="0"><span class="val" id="tvolV"></span></div>
     <div class="row"><label for="scape">Soundscape</label><select id="scape"></select></div>
     <div class="row"><label for="wvol">Scape volume</label><input id="wvol" type="range" min="0" max="100" step="1" value="60"><span class="val" id="wvolV"></span></div>
   </div>
@@ -83,7 +84,7 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
     <div class="row"><span class="lab">Lights</span><div class="modes"><button data-lights="always">Always on</button><button data-lights="sound">Sound activated</button></div></div>
     <div class="row"><span class="lab">Reach</span><div class="modes"><button data-reach="1">Standard</button><button data-reach="1.2">Far</button><button data-reach="1.4">Farthest</button></div></div>
     <div class="row"><span class="lab">Face lights</span><div class="modes"><button data-faces="on">On</button><button data-faces="off">Off</button></div></div>
-    <div class="row"><label for="jit">Jitter</label><input id="jit" type="range" min="0" max="100" step="5" value="0"><span class="val" id="jitV"></span></div>
+    <div class="row"><label for="jit">Jitter</label><input id="jit" type="range" min="0" max="100" step="5" value="100"><span class="val" id="jitV"></span></div>
     <div class="row"><label for="pitch">Spacing</label><input id="pitch" type="range" min="0.2" max="1.5" step="0.05" value="0.5"><span class="val" id="pitchV"></span></div>
     <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="1"><span class="val" id="driftV"></span></div>
     <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="30" step="0.5" value="6"><span class="val" id="spdV"></span></div>
@@ -126,8 +127,8 @@ const HEADSETS = {
 };
 let headset = 'q3';
 const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6, drift: 1.0, pitch: 0.5,
-              sound: false, echo: false, toneHz: 432, toneVol: 35, scape: 'off', scapeVol: 60, reach: 1,
-              lights: 'sound', faces: false, jitter: 0, set: 'pulse', bg: 'space', light: 'natural', fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
+              sound: false, echo: false, toneHz: 432, toneVol: 0, scape: 'off', scapeVol: 60, reach: 1,
+              lights: 'sound', faces: false, jitter: 0, set: 'pulse', bg: 'space', light: 'natural', deep: true, fortySharp: true, pattern: 'coh', goal: 8, beat: 6 };
 // Breathing patterns, in seconds: in, hold, out, hold
 const PATTERNS = { coh: [5, 0, 5, 0], box: [4, 4, 4, 4], '478': [4, 7, 8, 0] };
 const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.65, 0.48, 1.00], COL_FUCHSIA = [1.00, 0.08, 0.78];
@@ -246,7 +247,42 @@ const starMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
 });
 {
-  const sPos = new Float32Array(STARS * 3), sSize = new Float32Array(STARS), sSeed = new Float32Array(STARS);
+  // "Belles Place", written in small stars: behind your right shoulder and a little above the horizon
+  const GLYPHS = {
+    B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
+    e: ['00000', '00000', '01110', '10001', '11111', '10000', '01110'],
+    l: ['01100', '00100', '00100', '00100', '00100', '00100', '01110'],
+    s: ['00000', '00000', '01111', '10000', '01110', '00001', '11110'],
+    P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
+    a: ['00000', '00000', '01110', '00001', '01111', '10001', '01111'],
+    c: ['00000', '00000', '01110', '10001', '10000', '10001', '01110'],
+    ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000']
+  };
+  const TEXT = 'Belles Place', CELL = 0.4 * Math.PI / 180, AZ = 140 * Math.PI / 180, EL = 30 * Math.PI / 180;
+  const fw = [-Math.sin(AZ) * Math.cos(EL), Math.sin(EL), -Math.cos(AZ) * Math.cos(EL)];
+  const rt = [Math.cos(AZ), 0, -Math.sin(AZ)];
+  const up = [Math.sin(AZ) * Math.sin(EL), Math.cos(EL), Math.cos(AZ) * Math.sin(EL)];
+  const dots = [];
+  for (let ci = 0; ci < TEXT.length; ci++) {
+    const g = GLYPHS[TEXT[ci]];
+    for (let row = 0; row < 7; row++) for (let col = 0; col < 5; col++) {
+      if (g[row][col] !== '1') continue;
+      // a little unevenness, so it reads as stars that happen to line up
+      const x = (ci * 6 + col - (TEXT.length * 6 - 1) / 2 + (Math.random() - 0.5) * 0.3) * CELL;
+      const y = (3 - row + (Math.random() - 0.5) * 0.3) * CELL;
+      const d = [fw[0] + rt[0] * x + up[0] * y, fw[1] + rt[1] * x + up[1] * y, fw[2] + rt[2] * x + up[2] * y];
+      const len = Math.hypot(d[0], d[1], d[2]);
+      dots.push([d[0] / len * 140, d[1] / len * 140, d[2] / len * 140]);
+    }
+  }
+  const TOTAL = STARS + dots.length;
+  const sPos = new Float32Array(TOTAL * 3), sSize = new Float32Array(TOTAL), sSeed = new Float32Array(TOTAL);
+  dots.forEach((d, i) => {
+    const k = STARS + i;
+    sPos[k * 3] = d[0]; sPos[k * 3 + 1] = d[1]; sPos[k * 3 + 2] = d[2];
+    sSize[k] = 1.5 + Math.random() * 0.5;       // about the size of the brighter background stars
+    sSeed[k] = 0.75 + Math.random() * 0.25;
+  });
   for (let i = 0; i < STARS; i++) {
     const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u);
     sPos[i * 3] = 140 * s * Math.cos(th); sPos[i * 3 + 1] = 140 * u; sPos[i * 3 + 2] = 140 * s * Math.sin(th);
@@ -260,6 +296,104 @@ const starMat = new THREE.ShaderMaterial({
   const stars = new THREE.Points(g, starMat);
   stars.frustumCulled = false; stars.renderOrder = 1;
   world.add(stars);
+}
+
+// ---- Deep sky: galaxies and glowing clouds scattered through space, which you drift past ----
+// Everything here is drawn by the page itself (no image files). Positions are fixed, the same on every visit.
+const DEEP = 700;                    // the deep-sky layout repeats every 700 m
+const deepObjs = [];
+{
+  let seed = 20261121;
+  const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const gauss = () => (rnd() + rnd() + rnd() + rnd() - 2) / 2;
+  const canvas = s => { const c = document.createElement('canvas'); c.width = c.height = s; return c; };
+
+  // a spiral galaxy: a warm core, a faint disc, and arms made of thousands of small stars
+  function spiral(arms, turns, tint) {
+    const S = 512, c = canvas(S), g = c.getContext('2d'), R = S * 0.46;
+    g.fillStyle = '#000'; g.fillRect(0, 0, S, S);
+    g.globalCompositeOperation = 'lighter';
+    let gr = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, R);
+    gr.addColorStop(0, 'rgba(' + tint + ',0.22)'); gr.addColorStop(0.5, 'rgba(' + tint + ',0.06)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, S, S);
+    for (let a = 0; a < arms; a++) for (let i = 0; i < 2600; i++) {
+      const t = Math.pow(rnd(), 0.75), r = t * R;
+      const th = a / arms * Math.PI * 2 + t * turns * Math.PI * 2 + gauss() * (0.35 - 0.2 * t);
+      const x = S / 2 + Math.cos(th) * r + gauss() * 5, y = S / 2 + Math.sin(th) * r + gauss() * 5;
+      const hot = rnd() < 0.06;
+      g.fillStyle = hot ? 'rgba(255,190,200,' + (0.5 * (1 - t) + 0.25) + ')' : 'rgba(' + tint + ',' + (0.30 * (1 - t) + 0.07) + ')';
+      const sz = hot ? 1.6 : 0.7 + rnd() * 0.8;
+      g.beginPath(); g.arc(x, y, sz, 0, 6.3); g.fill();
+    }
+    gr = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, R * 0.28);
+    gr.addColorStop(0, 'rgba(255,240,210,1)'); gr.addColorStop(0.25, 'rgba(255,215,160,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, S, S);
+    return new THREE.CanvasTexture(c);
+  }
+  // a glowing gas cloud; with 'pillars', dark columns rise through it with bright rims,
+  // in the manner of the Pillars of Creation (an impression, not the photograph)
+  function cloud2d(pillars, colA, colB) {
+    const S = 448, c = canvas(S), g = c.getContext('2d'), img = g.createImageData(S, S), d = img.data;
+    const P = new Float32Array(4096); for (let i = 0; i < 4096; i++) P[i] = rnd();
+    const hsh = (x, y) => P[((x * 73 + y * 151) % 4096 + 4096) % 4096];
+    const noise = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+      return (hsh(xi, yi) * (1 - u) + hsh(xi + 1, yi) * u) * (1 - v) + (hsh(xi, yi + 1) * (1 - u) + hsh(xi + 1, yi + 1) * u) * v; };
+    const fbm = (x, y) => { let s = 0, a = 0.5; for (let o = 0; o < 5; o++) { s += a * noise(x, y); x *= 2.03; y *= 2.03; a *= 0.5; } return s; };
+    const cols = [[0.33, 0.085, 0.78], [0.50, 0.065, 0.64], [0.64, 0.05, 0.50]];     // x position, half-width, height of each pillar
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const u = x / S, v = y / S, n = fbm(u * 5, v * 5), n2 = fbm(u * 11 + 30, v * 11 + 7);
+      const edge = Math.max(0, 1 - Math.hypot(u - 0.5, v - 0.5) * 2.05);         // fade to nothing at the border
+      let glow = Math.pow(n, 1.4) * (pillars ? 2.1 : 1.5) * Math.pow(edge, 0.8), rim = 0, dark = 0;
+      if (pillars) for (const [cx, hw, top] of cols) {
+        const h = 1 - v;                                                        // height up the picture
+        const w = hw * (1 - 0.55 * h / top) * (0.85 + 0.5 * n2);
+        const dx = Math.abs(u - cx + (n - 0.5) * 0.10);
+        if (h < top * (0.9 + 0.2 * n2)) {
+          const inside = 1 - Math.min(1, dx / w);
+          if (inside > 0) { const s = Math.min(1, inside * 5); dark = Math.max(dark, s * s * (3 - 2 * s)); rim = Math.max(rim, Math.exp(-inside * 16) * 1.6); }
+        }
+      }
+      const k = n2, i4 = (y * S + x) * 4;
+      let r = (colA[0] * (1 - k) + colB[0] * k) * glow, gg = (colA[1] * (1 - k) + colB[1] * k) * glow, b = (colA[2] * (1 - k) + colB[2] * k) * glow;
+      if (pillars) {
+        const body = 0.22 * (0.4 + n2 + 0.6 * n) * edge;                         // dusty brown columns
+        r = r * (1 - dark) + dark * body * 1.0 + rim * dark * 1.0 * edge; gg = gg * (1 - dark) + dark * body * 0.6 + rim * dark * 0.75 * edge; b = b * (1 - dark) + dark * body * 0.35 + rim * dark * 0.45 * edge;
+      }
+      d[i4] = Math.min(255, r * 255); d[i4 + 1] = Math.min(255, gg * 255); d[i4 + 2] = Math.min(255, b * 255); d[i4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return new THREE.CanvasTexture(c);
+  }
+  const textures = [
+    [spiral(2, 1.1, '170,200,255'), 1], [spiral(3, 0.8, '200,215,255'), 1], [spiral(4, 0.65, '255,225,200'), 1], [spiral(2, 1.6, '190,170,255'), 1],
+    [cloud2d(true, [0.10, 0.55, 0.60], [0.75, 0.45, 0.15]), 3.2], [cloud2d(false, [0.65, 0.12, 0.30], [0.20, 0.25, 0.75]), 3.6], [cloud2d(false, [0.10, 0.50, 0.45], [0.55, 0.20, 0.65]), 3.0]
+  ];
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const add = (ti, x, y, z, size) => {
+    const mat = new THREE.MeshBasicMaterial({ map: textures[ti][0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(geo, mat);
+    m.scale.setScalar(size * textures[ti][1]);
+    // galaxies lie at any angle; clouds stand upright and turn to face roughly inwards
+    if (ti < 4) m.rotation.set(rnd() * 6.3, rnd() * 6.3, rnd() * 6.3); else m.rotation.set((rnd() - 0.5) * 0.4, rnd() * 6.3, (rnd() - 0.5) * 0.3);
+    m.frustumCulled = false; m.renderOrder = 0.5;
+    world.add(m);
+    deepObjs.push({ m, x, y, z, bright: ti < 4 ? 0.9 : 0.75 });
+  };
+  for (let i = 0; i < 70; i++) add(Math.floor(rnd() * 4), rnd() * DEEP, rnd() * DEEP, rnd() * DEEP, 16 + rnd() * 44);
+  add(4, 120, 40, 520, 30);                                 // the pillars, ahead and to the left of where you start
+  for (let i = 0; i < 6; i++) add(5 + (i % 2), rnd() * DEEP, rnd() * DEEP, rnd() * DEEP, 26 + rnd() * 22);
+}
+function updateDeep(px, py, pz) {
+  const half = DEEP / 2;
+  for (const o of deepObjs) {
+    const x = ((o.x - px + half) % DEEP + DEEP) % DEEP - half, y = ((o.y - py + half) % DEEP + DEEP) % DEEP - half, z = ((o.z - pz + half) % DEEP + DEEP) % DEEP - half;
+    o.m.position.set(x, y, z);
+    const d = Math.sqrt(x * x + y * y + z * z);
+    // fade in from the far edge, and fade out when you fly right through one
+    const f = Math.max(0, Math.min(1, (half - d) / 90)) * Math.max(0, Math.min(1, (d - 4) / 30));
+    o.m.material.opacity = cfg.deep ? f * o.bright : 0;
+    o.m.visible = o.m.material.opacity > 0.003;
+  }
 }
 
 // ---- Lattice (built when you press Enter) ----
@@ -839,6 +973,8 @@ function setReach(v) {
 }
 all('[data-lights]').forEach(b => b.addEventListener('click', () => setLights(b.dataset.lights)));
 all('[data-bg]').forEach(b => b.addEventListener('click', () => setBackground(b.dataset.bg)));
+function setDeep(on) { cfg.deep = on; all('[data-deep]').forEach(b => b.classList.toggle('on', (b.dataset.deep === 'on') === on)); }
+all('[data-deep]').forEach(b => b.addEventListener('click', () => setDeep(b.dataset.deep === 'on')));
 $('bgCol').addEventListener('input', () => setBackground('colour'));
 all('[data-lt]').forEach(b => b.addEventListener('click', () => setLightColour(b.dataset.lt)));
 $('ltCol').addEventListener('input', () => setLightColour('colour'));
@@ -960,7 +1096,7 @@ all('[data-dev]').forEach(b => b.addEventListener('click', () => setDevice(b.dat
 (async () => {
   try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
 })();
-readControls(); setSound(false); setEcho(false); setSharp(true); setLights('sound'); setBackground('space'); setLightColour('natural'); setFaces(false); setPattern('coh'); setBeat(6);
+readControls(); setSound(false); setEcho(false); setSharp(true); setLights('sound'); setDeep(true); setBackground('space'); setLightColour('natural'); setFaces(true); setPattern('coh'); setBeat(6);
 all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === 'pulse'));
 document.body.dataset.active = 'pulse';
 setReach(1);
@@ -981,6 +1117,8 @@ $('go').addEventListener('click', async () => {
   const mic = await startMic();
   if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch (err) {} }
   setMode(mic ? 'voice' : 'sim');
+  // the opening: the binaural music playing, with the tone silent until you raise it
+  setSound(true); setScape('velvet');
   try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (err) {}
   $('start').style.display = 'none';
   panel.style.display = 'block';
@@ -1125,6 +1263,7 @@ renderer.setAnimationLoop((ms, frame) => {
   camUniform.set(wrap(px / cfg.pitch), wrap(py / cfg.pitch), wrap(pz / cfg.pitch));   // in lattice steps
   material.uniforms.uPitch.value = cfg.pitch;
   material.uniforms.uJit.value = jitterReach();
+  updateDeep(px, py, pz);
   for (let i = 0; i < SLOTS; i++) {
     pulseRel[i * 3] = pulseWorld[i * 3] - px;
     pulseRel[i * 3 + 1] = pulseWorld[i * 3 + 1] - py;
@@ -1162,6 +1301,9 @@ renderer.setAnimationLoop((ms, frame) => {
 window.pulseLattice = {
   touch: (x, y, z) => touchAt(cam.x + x, cam.y + y, cam.z + z, clock.getElapsedTime()),
   near: (x, y, z) => Array.from(nearestLight(x, y, z)),
+  hideLattice: v => { cloud.visible = !v; },
+  goto: (x, y, z) => { cam.x = x; cam.y = y; cam.z = z; },
+  look: (yawDeg, pitchDeg) => { yaw = yawDeg * Math.PI / 180; pitch = pitchDeg * Math.PI / 180; },
   seekEnd: () => { const p = players[curPlayer].el; p.currentTime = Math.max(0, p.duration - 4.5); },
   state: () => ({ lightCount, size: SIZE, faces: cfg.faces, set: cfg.set, mode: cfg.mode, lights: cfg.lights, water: cfg.scape, playing: players.map(p => [!p.el.paused, +p.el.currentTime.toFixed(1), +p.g.gain.value.toFixed(2)]), humT, mix: mixNow, rest: material ? material.uniforms.uRest.value : 0, col: colNow.slice(), fps })
 };

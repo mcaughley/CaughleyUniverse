@@ -14,24 +14,36 @@ canvas{display:block}
 #panel{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:rgba(0,0,0,.55);font-size:13px;display:none}
 #panel.hidden .rows{display:none}
 .row{display:flex;align-items:center;gap:10px;margin:6px 0}
-.row label{width:92px}
-.row input{flex:1}
-.row span{width:64px;text-align:right}
+.row label,.row .lab{width:92px}
+.row input[type=range]{flex:1}
+.row span.val{width:64px;text-align:right}
 #toggle{background:none;border:0;color:#6f9fc4;font-size:13px;padding:4px 0}
 #status{color:#6f9fc4;font-size:12px;margin-top:2px}
+.modes{display:flex;flex:1;gap:8px}
+.modes button{flex:1;padding:8px 0;border-radius:18px;border:1px solid #35607f;background:transparent;color:#6f9fc4;font-size:13px}
+.modes button.on{border-color:#9fd8ff;color:#001018;background:#9fd8ff}
+#meter{flex:1;height:8px;border-radius:4px;background:#12202c;overflow:hidden}
+#meterFill{height:100%;width:0;background:#9fd8ff}
+.voiceOnly,.simOnly{display:none}
+body.voice .voiceOnly{display:flex}
+body.sim .simOnly{display:flex}
 </style>
 </head>
-<body>
+<body class="sim">
 <div id="start">
   <h1>PULSE LATTICE</h1>
-  <p>You are at the centre of a 50 m cube of lights. Turn and tilt your phone to look around.</p>
+  <p>You are standing inside a field of lights that runs off in every direction. Turn and tilt your phone to look around. Your voice sends waves of light out through it.</p>
+  <p>Allow the microphone when asked. Sound is only measured for loudness on this phone. Nothing is recorded or sent.</p>
   <button id="go">Enter</button>
 </div>
 <div id="panel">
   <button id="toggle">Hide controls</button>
   <div class="rows">
-    <div class="row"><label for="bpm">Pulse</label><input id="bpm" type="range" min="30" max="140" step="1" value="60"><span id="bpmV"></span></div>
-    <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="10" step="0.5" value="3"><span id="spdV"></span></div>
+    <div class="row"><span class="lab">Source</span><div class="modes"><button id="mVoice">Voice</button><button id="mSim">Simulated pulse</button></div></div>
+    <div class="row voiceOnly"><span class="lab">Voice level</span><div id="meter"><div id="meterFill"></div></div><span class="val" id="lvlV"></span></div>
+    <div class="row voiceOnly"><label for="sens">Sensitivity</label><input id="sens" type="range" min="1" max="10" step="1" value="6"><span class="val" id="sensV"></span></div>
+    <div class="row simOnly"><label for="bpm">Pulse</label><input id="bpm" type="range" min="30" max="140" step="1" value="60"><span class="val" id="bpmV"></span></div>
+    <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="10" step="0.5" value="3"><span class="val" id="spdV"></span></div>
     <div id="status"></div>
   </div>
 </div>
@@ -44,8 +56,8 @@ import * as THREE from 'three';
 // ---- Settings ----
 const N = 50;            // nodes per axis: 50 m cube at 1 m pitch
 const PITCH = 1.0;       // metres between lights
-const SLOTS = 16;        // max simultaneous pulse rings
-const cfg = { bpm: 60, speed: 3.0, width: 0.6, tail: 3.0 };
+const SLOTS = 40;        // max simultaneous wave rings
+const cfg = { bpm: 60, speed: 3.0, width: 0.6, tail: 3.0, mode: 'sim', sens: 6 };
 
 // ---- Lattice positions. Viewer sits at the origin, midway between nodes ----
 const HALF = (N - 1) * PITCH / 2;
@@ -63,42 +75,63 @@ const geometry = new THREE.BufferGeometry();
 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), HALF * 1.75);
 
-// ---- Pulse timing ----
+// ---- Wave rings: each has a start time and a brightness (amplitude) ----
 const pulseTimes = new Float32Array(SLOTS).fill(-1e6);
+const pulseAmps = new Float32Array(SLOTS).fill(0);
 let slot = 0;
-let nextBeat = 0;
+function emit(time, amp) {
+  pulseTimes[slot] = time;
+  pulseAmps[slot] = amp;
+  slot = (slot + 1) % SLOTS;
+}
 
 // ---- Shader: each light brightens as a wavefront passes it ----
 const material = new THREE.ShaderMaterial({
   uniforms: {
     uTime: { value: 0 },
     uPulseT: { value: pulseTimes },
+    uPulseA: { value: pulseAmps },
     uSpeed: { value: cfg.speed },
     uWidth: { value: cfg.width },
     uTail: { value: cfg.tail },
+    uTrailW: { value: 0.5 },
+    uLevel: { value: 0 },
     uScale: { value: 30 }
   },
   vertexShader: `
     uniform float uTime;
     uniform float uPulseT[${SLOTS}];
+    uniform float uPulseA[${SLOTS}];
     uniform float uSpeed;
     uniform float uWidth;
     uniform float uTail;
+    uniform float uTrailW;
+    uniform float uLevel;
     uniform float uScale;
     varying float vGlow;
+    varying float vFade;
+    varying float vTw;
     void main() {
       float d = length(position);   // distance from the viewer
+      // lights dissolve into the distance, so the field has no visible edge
+      vFade = 1.0 - smoothstep(14.0, 24.0, d);
+      // each light breathes slowly at its own rate
+      float h = fract(sin(dot(position, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+      vTw = 0.5 + 0.5 * sin(uTime * (0.25 + 0.5 * h) + h * 6.2832);
       float g = 0.0;
       for (int i = 0; i < ${SLOTS}; i++) {
+        float amp = uPulseA[i];
         float age = uTime - uPulseT[i];
-        if (age >= 0.0) {
+        if (amp > 0.0 && age >= 0.0) {
           float r = age * uSpeed;      // wavefront radius
           float ahead = (d - r) / uWidth;
           float front = exp(-ahead * ahead);
           float trail = (d < r) ? exp(-(r - d) / uTail) : 0.0;
-          g += (front + 0.5 * trail) * exp(-age * 0.25);
+          g += amp * (front + uTrailW * trail) * exp(-age * 0.25);
         }
       }
+      // lights close to you lift gently with the live voice level
+      g += 0.35 * uLevel * exp(-d / 6.0);
       vGlow = clamp(g, 0.0, 1.0);
       vec4 mv = modelViewMatrix * vec4(position, 1.0);
       gl_Position = projectionMatrix * mv;
@@ -107,12 +140,15 @@ const material = new THREE.ShaderMaterial({
   `,
   fragmentShader: `
     varying float vGlow;
+    varying float vFade;
+    varying float vTw;
     void main() {
       vec2 c = gl_PointCoord - vec2(0.5);
       float a = smoothstep(0.5, 0.0, length(c));
-      vec3 base = vec3(0.10, 0.18, 0.32);
-      vec3 hot = vec3(0.65, 0.95, 1.0);
-      gl_FragColor = vec4(mix(base, hot, vGlow), a * (0.25 + 0.75 * vGlow));
+      vec3 base = vec3(0.12, 0.24, 0.46);
+      vec3 hot = vec3(0.70, 0.95, 1.0);
+      float rest = 0.22 + 0.28 * vTw;          // resting glow, gently breathing
+      gl_FragColor = vec4(mix(base, hot, vGlow), a * vFade * (rest + (1.0 - rest) * vGlow));
     }
   `,
   transparent: true,
@@ -176,9 +212,113 @@ addEventListener('pointermove', e => {
   lx = e.clientX; ly = e.clientY;
 });
 
-// ---- Start button (a tap is required before sensors can be read on some phones) ----
-const statusEl = document.getElementById('status');
-document.getElementById('go').addEventListener('click', async () => {
+// ---- Microphone: loudness only ----
+let analyser = null, audioCtx = null, buf = null;
+let floorDb = -60;       // running estimate of the room's background level
+let level = 0;           // 0..1 voice level above the background
+let smooth = 0;          // smoothed level for display and near-field glow
+let micError = '';
+
+async function startMic() {
+  if (analyser) return true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0;
+    src.connect(analyser);
+    buf = new Float32Array(analyser.fftSize);
+    return true;
+  } catch (err) {
+    micError = (err && err.name) ? err.name : 'error';
+    analyser = null;
+    return false;
+  }
+}
+
+// Pure function so the level maths can be checked on its own.
+// db: current loudness, floor: background, sens: 1 (needs a loud voice) .. 10 (picks up a whisper)
+function levelFrom(db, floor, sens) {
+  const margin = 26 - 2 * sens;          // dB above background before anything happens
+  const range = 28;                      // dB from "just on" to full brightness
+  return Math.max(0, Math.min(1, (db - floor - margin) / range));
+}
+
+function readMic() {
+  if (!analyser) { level = 0; return; }
+  analyser.getFloatTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  const rms = Math.sqrt(sum / buf.length);
+  const db = 20 * Math.log10(Math.max(rms, 1e-6));
+  // background follows quiet moments quickly and loud moments very slowly
+  floorDb += (db - floorDb) * (db < floorDb ? 0.05 : 0.0005);
+  level = levelFrom(db, floorDb, cfg.sens);
+}
+
+// ---- Wave sources ----
+let nextBeat = 0;        // simulated pulse
+let voiceOn = false;     // is the voice currently above the threshold
+let lastVoiceEmit = -1e6;
+const ON = 0.08, OFF = 0.04;
+
+function driveSim(t) {
+  const interval = 60 / cfg.bpm;
+  if (nextBeat < t - interval) nextBeat = t;   // after a pause, don't replay missed beats
+  while (t >= nextBeat) { emit(nextBeat, 1); nextBeat += interval; }
+}
+function driveVoice(t) {
+  readMic();
+  smooth += (level - smooth) * 0.25;
+  if (!voiceOn && level > ON) { voiceOn = true; lastVoiceEmit = -1e6; }  // new sound: ring leaves at once
+  if (voiceOn && level < OFF) voiceOn = false;
+  // while the sound is held, keep feeding rings close enough together to merge into one stream
+  const gap = Math.max(0.12, Math.min(0.5, cfg.width * 1.2 / cfg.speed));
+  if (voiceOn && t - lastVoiceEmit >= gap) {
+    emit(t, Math.max(0.15, level));
+    lastVoiceEmit = t;
+  }
+}
+
+// ---- Controls ----
+const $ = id => document.getElementById(id);
+const statusEl = $('status');
+function setMode(m) {
+  cfg.mode = m;
+  document.body.className = m;
+  $('mVoice').classList.toggle('on', m === 'voice');
+  $('mSim').classList.toggle('on', m === 'sim');
+  material.uniforms.uTrailW.value = m === 'voice' ? 0.12 : 0.5;
+  pulseAmps.fill(0);                     // clear waves from the other source
+  voiceOn = false; smooth = 0; level = 0;
+}
+$('mSim').addEventListener('click', () => setMode('sim'));
+$('mVoice').addEventListener('click', async () => {
+  if (await startMic()) { setMode('voice'); statusEl.textContent = 'Voice on: hum, speak or sing.'; }
+  else statusEl.textContent = 'Microphone not available (' + micError + '). Allow it for this site in Chrome, then tap Voice again.';
+});
+function readControls() {
+  cfg.bpm = Number($('bpm').value);
+  cfg.speed = Number($('spd').value);
+  cfg.sens = Number($('sens').value);
+  $('bpmV').textContent = cfg.bpm + ' BPM';
+  $('spdV').textContent = cfg.speed.toFixed(1) + ' m/s';
+  $('sensV').textContent = cfg.sens + ' / 10';
+}
+['bpm', 'spd', 'sens'].forEach(id => $(id).addEventListener('input', readControls));
+readControls();
+const panel = $('panel'), toggle = $('toggle');
+toggle.addEventListener('click', () => {
+  toggle.textContent = panel.classList.toggle('hidden') ? 'Show controls' : 'Hide controls';
+});
+
+// ---- Start button (a tap is required before sensors and the mic can be used) ----
+$('go').addEventListener('click', async () => {
   let allowed = true;
   try {
     if (typeof DeviceOrientationEvent !== 'undefined' &&
@@ -187,48 +327,36 @@ document.getElementById('go').addEventListener('click', async () => {
     }
   } catch (err) { allowed = false; }
   if (allowed) addEventListener('deviceorientation', onOrient);
-  document.getElementById('start').style.display = 'none';
-  document.getElementById('panel').style.display = 'block';
+  const mic = await startMic();
+  setMode(mic ? 'voice' : 'sim');
+  try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (err) {}
+  $('start').style.display = 'none';
+  panel.style.display = 'block';
   setTimeout(() => {
-    statusEl.textContent = sensorEvents > 0
-      ? 'Motion sensors on: move the phone to look around.'
-      : 'No motion sensor data: drag the screen to look around.';
+    const look = sensorEvents > 0 ? 'Motion sensors on.' : 'No motion sensor data: drag to look.';
+    const src = mic ? 'Voice on: hum, speak or sing.' : 'Microphone not available (' + micError + '): using simulated pulse.';
+    statusEl.textContent = look + ' ' + src;
   }, 1500);
-});
-
-// ---- Controls ----
-const bpm = document.getElementById('bpm'), spd = document.getElementById('spd');
-const bpmV = document.getElementById('bpmV'), spdV = document.getElementById('spdV');
-function readControls() {
-  cfg.bpm = Number(bpm.value);
-  cfg.speed = Number(spd.value);
-  bpmV.textContent = cfg.bpm + ' BPM';
-  spdV.textContent = cfg.speed.toFixed(1) + ' m/s';
-}
-bpm.addEventListener('input', readControls);
-spd.addEventListener('input', readControls);
-readControls();
-const panel = document.getElementById('panel'), toggle = document.getElementById('toggle');
-toggle.addEventListener('click', () => {
-  toggle.textContent = panel.classList.toggle('hidden') ? 'Show controls' : 'Hide controls';
 });
 
 // ---- Animation loop ----
 const clock = new THREE.Clock();
+const meterFill = $('meterFill'), lvlV = $('lvlV');
+let uiTimer = 0;
 renderer.setAnimationLoop(() => {
   const t = clock.getElapsedTime();
-  const interval = 60 / cfg.bpm;
-  if (nextBeat < t - interval) nextBeat = t;   // after a pause, don't replay missed beats
-  while (t >= nextBeat) {                      // each beat starts a new ring at the viewer
-    pulseTimes[slot] = nextBeat;
-    slot = (slot + 1) % SLOTS;
-    nextBeat += interval;
-  }
+  if (cfg.mode === 'voice') driveVoice(t); else driveSim(t);
   material.uniforms.uTime.value = t;
   material.uniforms.uSpeed.value = cfg.speed;
+  material.uniforms.uLevel.value = cfg.mode === 'voice' ? smooth : 0;
   if (sensor) applySensor();
   else camera.rotation.set(pitch, yaw, 0, 'YXZ');
   renderer.render(scene, camera);
+  if (cfg.mode === 'voice' && t - uiTimer > 0.08) {
+    uiTimer = t;
+    meterFill.style.width = Math.round(smooth * 100) + '%';
+    lvlV.textContent = Math.round(smooth * 100) + '%';
+  }
 });
 </script>
 </body>

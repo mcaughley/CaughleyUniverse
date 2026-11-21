@@ -41,8 +41,11 @@ body.sim .simOnly{display:flex}
 <div id="start">
   <h1>PULSE LATTICE</h1>
   <p id="intro">A lattice of lights that never ends, dark until your voice wakes it. Turn and tilt your phone to look around. You drift the way you face: touch and hold to travel faster.</p>
-  <div class="modes" id="hsRow" style="max-width:420px;width:100%;display:none">
-    <button data-hs="q2">Quest 2</button><button data-hs="q3" class="on">Quest 3 / 3S</button><button data-hs="qpro">Quest Pro</button><button data-hs="max">Other / PC</button>
+  <div class="modes" id="devRow" style="max-width:420px;width:100%;flex:none">
+    <button data-dev="phone">Phone</button><button data-dev="pc">PC</button><button data-dev="vr">VR</button>
+  </div>
+  <div class="modes" id="hsRow" style="max-width:420px;width:100%;display:none;flex:none">
+    <button data-hs="q2">Quest 2</button><button data-hs="q3" class="on">Quest 3 / 3S</button><button data-hs="qpro">Quest Pro</button><button data-hs="max">Other headset</button>
   </div>
   <p>Headphones make it feel much bigger. Allow the microphone when asked: your voice is only used live on this device. Nothing is recorded or sent.</p>
   <button id="go" class="big">Enter</button>
@@ -770,17 +773,27 @@ document.addEventListener('visibilitychange', () => {
 // ---- Start, and entering VR ----
 let started = false, vrSupported = false;
 const clock = new THREE.Clock();
+// ---- Phone, PC or VR: chosen on the start screen (the page guesses, you can change it) ----
+let device = 'pc';
+const INTRO = {
+  phone: 'A lattice of lights that never ends, dark until your voice wakes it. Turn and tilt your phone to look around. You drift the way you face: touch and hold to travel faster.',
+  pc: 'A lattice of lights that never ends, dark until your voice wakes it. Drag to look around. You drift the way you face: click and hold to travel faster.',
+  vr: 'A lattice of lights that never ends, dark until your voice wakes it. Choose your headset, then Enter. Set things up on the next screen, then press Enter VR.'
+};
+function setDevice(d) {
+  device = d;
+  all('[data-dev]').forEach(b => b.classList.toggle('on', b.dataset.dev === d));
+  $('hsRow').style.display = d === 'vr' ? 'flex' : 'none';
+  $('intro').textContent = INTRO[d];
+  autoHide = d === 'phone';
+}
+all('[data-dev]').forEach(b => b.addEventListener('click', () => setDevice(b.dataset.dev)));
+{
+  const ua = navigator.userAgent || '';
+  setDevice(/OculusBrowser|Quest|Pico|Wolvic|VisionOS/i.test(ua) ? 'vr' : /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ? 'phone' : 'pc');
+}
 (async () => {
   try { vrSupported = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-vr'); } catch (err) { vrSupported = false; }
-  // Phones also report that they can do VR (for cardboard viewers). Treat a phone as a phone: motion sensors, no headset choice.
-  const ua = navigator.userAgent || '';
-  const isHeadset = /OculusBrowser|Quest|Pico|Wolvic|VisionOS/i.test(ua);
-  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) && !isHeadset) vrSupported = false;
-  if (vrSupported) {
-    $('hsRow').style.display = 'flex';
-    $('intro').textContent = 'A lattice of lights that never ends, dark until your voice wakes it. Choose your headset, then Enter. Set things up on the next screen, then press Enter VR.';
-    autoHide = false;
-  }
 })();
 readControls(); setSound(true); setEcho(false); setSharp(true); setLights('sound'); setPattern('coh'); setBeat(6);
 all('[data-set]').forEach(b => b.classList.toggle('on', b.dataset.set === 'none'));
@@ -788,14 +801,15 @@ applyWater();
 
 $('go').addEventListener('click', async () => {
   startAudio();                                   // must begin inside the tap
-  if (!vrSupported) { headset = 'max'; try { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); } catch (err) {} }
+  if (device !== 'vr') headset = 'max';
+  if (device === 'phone') { try { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); } catch (err) {} }
   let allowed = true;
   try {
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
       allowed = (await DeviceOrientationEvent.requestPermission()) === 'granted';
     }
   } catch (err) { allowed = false; }
-  if (allowed && !vrSupported) addEventListener('deviceorientation', onOrient);
+  if (allowed && device === 'phone') addEventListener('deviceorientation', onOrient);
   buildLattice();
   const mic = await startMic();
   if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch (err) {} }
@@ -803,13 +817,19 @@ $('go').addEventListener('click', async () => {
   try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (err) {}
   $('start').style.display = 'none';
   panel.style.display = 'block';
-  $('enterVR').style.display = vrSupported ? 'block' : 'none';
+  $('enterVR').style.display = (device === 'vr' && vrSupported) ? 'block' : 'none';
   showPanel();
   started = true;
   setTimeout(() => {
-    lookMsg = vrSupported
-      ? HEADSETS[headset].label + ': ' + (N * N * N).toLocaleString() + ' lights per block. Set things up here, then press Enter VR. In VR: right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. The A button turns 40+40 on and off once you have accepted its warning here.'
-      : (sensorEvents > 0 ? 'Motion sensors on.' : 'No motion sensor data: drag to look.') + ' Tap the screen to show or hide the menus.';
+    if (device === 'vr') {
+      lookMsg = HEADSETS[headset].label + ': ' + (N * N * N).toLocaleString() + ' lights per block. ' + (vrSupported
+        ? 'Set things up here, then press Enter VR. In VR: right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. The A button turns 40+40 on and off once you have accepted its warning here.'
+        : 'This browser cannot start VR. Open this page in the headset\'s own browser. Until then this is a preview: drag to look.');
+    } else if (device === 'phone') {
+      lookMsg = (sensorEvents > 0 ? 'Motion sensors on.' : 'No motion sensor data: drag to look.') + ' Tap the screen to show or hide the menus.';
+    } else {
+      lookMsg = 'Drag to look. Click and hold to travel faster.';
+    }
     if (!mic) lookMsg += ' Microphone not available (' + micError + '): using simulated pulse.';
   }, 1500);
 });

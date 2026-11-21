@@ -44,7 +44,7 @@ body.sim .simOnly{display:flex}
     <div class="row voiceOnly"><label for="sens">Sensitivity</label><input id="sens" type="range" min="1" max="10" step="1" value="6"><span class="val" id="sensV"></span></div>
     <div class="row simOnly"><label for="bpm">Pulse</label><input id="bpm" type="range" min="30" max="140" step="1" value="60"><span class="val" id="bpmV"></span></div>
     <div class="row"><label for="drift">Drift</label><input id="drift" type="range" min="0" max="10" step="0.5" value="1"><span class="val" id="driftV"></span></div>
-    <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="10" step="0.5" value="3"><span class="val" id="spdV"></span></div>
+    <div class="row"><label for="spd">Wave speed</label><input id="spd" type="range" min="0.5" max="30" step="0.5" value="6"><span class="val" id="spdV"></span></div>
     <div id="status"></div>
   </div>
 </div>
@@ -58,7 +58,7 @@ import * as THREE from 'three';
 const N = 50;            // nodes per axis: 50 m cube at 1 m pitch
 const PITCH = 1.0;       // metres between lights
 const SLOTS = 40;        // max simultaneous wave rings
-const cfg = { bpm: 60, speed: 3.0, width: 0.3, tail: 0.8, mode: 'sim', sens: 6, drift: 1.0 };
+const cfg = { bpm: 60, speed: 6.0, width: 0.3, tail: 0.8, mode: 'sim', sens: 6, drift: 1.0 };
 
 // ---- Lattice positions. Viewer sits at the origin, midway between nodes ----
 const HALF = (N - 1) * PITCH / 2;
@@ -311,7 +311,7 @@ function driveVoice(t) {
   if (!voiceOn && level > ON) { voiceOn = true; lastVoiceEmit = -1e6; }  // new sound: ring leaves at once
   if (voiceOn && level < OFF) voiceOn = false;
   // while the sound is held, keep feeding rings close enough together to merge into one stream
-  const gap = Math.max(0.12, Math.min(0.5, cfg.width * 1.2 / cfg.speed));
+  const gap = Math.max(0.04, Math.min(0.5, cfg.width * 1.2 / cfg.speed));
   if (voiceOn && t - lastVoiceEmit >= gap) {
     emit(t, Math.max(0.15, level));
     lastVoiceEmit = t;

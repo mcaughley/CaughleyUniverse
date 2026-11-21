@@ -387,12 +387,33 @@ const deepObjs = [];
   for (let i = 0; i < 70; i++) add(Math.floor(rnd() * 4), rnd() * DEEP, rnd() * DEEP, rnd() * DEEP, 16 + rnd() * 44);
   add(4, 120, 40, 520, 30);                                 // the pillars, ahead and to the left of where you start
   for (let i = 0; i < 6; i++) add(5 + (i % 2), rnd() * DEEP, rnd() * DEEP, rnd() * DEEP, 26 + rnd() * 22);
+
+  // Photographs of real nebulae and galaxies, as landmarks. Each appears twice, far apart, and always faces you.
+  const PHOTOS = [['nebula', 984, 717], ['spiral-a', 1024, 728], ['merging', 1024, 752], ['spiral-b', 1024, 783],
+                  ['disc', 1024, 638], ['jet', 1024, 1024], ['spiral-c', 1024, 768], ['starburst', 1024, 819]];
+  const loader = new THREE.TextureLoader();
+  const place = (name, w, hgt, x, y, z, size) => {
+    const mat = new THREE.MeshBasicMaterial({ map: loader.load('sky/' + name + '.jpg'), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(geo, mat);
+    m.scale.set(size, size * hgt / w, 1);
+    m.frustumCulled = false; m.renderOrder = 0.6;
+    world.add(m);
+    deepObjs.push({ m, x, y, z, bright: 1.0, face: true, roll: (rnd() - 0.5) * 1.2 });
+  };
+  // the first of each is laid out around where you start, so some are in view straight away
+  const NEAR = [[0, 30, -170], [190, -40, -90], [-200, 60, 40], [80, 120, 180], [-110, -90, -220], [240, 20, 150], [-60, 170, -60], [30, -150, 120]];
+  PHOTOS.forEach(([name, w, hgt], i) => {
+    const n = NEAR[i];
+    place(name, w, hgt, (n[0] + DEEP) % DEEP, (n[1] + DEEP) % DEEP, (n[2] + DEEP) % DEEP, 95 + rnd() * 40);
+    place(name, w, hgt, rnd() * DEEP, rnd() * DEEP, rnd() * DEEP, 80 + rnd() * 60);
+  });
 }
 function updateDeep(px, py, pz) {
   const half = DEEP / 2;
   for (const o of deepObjs) {
     const x = ((o.x - px + half) % DEEP + DEEP) % DEEP - half, y = ((o.y - py + half) % DEEP + DEEP) % DEEP - half, z = ((o.z - pz + half) % DEEP + DEEP) % DEEP - half;
     o.m.position.set(x, y, z);
+    if (o.face) { o.m.lookAt(world.position); o.m.rotateZ(o.roll); }      // photographs turn to face you
     const d = Math.sqrt(x * x + y * y + z * z);
     // fade in from the far edge, and fade out when you fly right through one
     const f = Math.max(0, Math.min(1, (half - d) / 90)) * Math.max(0, Math.min(1, (d - 4) / 30));

@@ -23,3 +23,8 @@ Original file names, which carry the creators' names:
 - water: dany_photo, water-423114
 - sound-therapy: gingerleegalaxy_1, healing-sound-therapy-asmr-332812
 - velvet-binaural: meditativetiger, velvet-binaurals-rapid-trance-therapy-494113
+
+## Sky photographs
+
+The images in `sky/` were supplied by the project owner and have been resized and edge-faded for use in the scene.
+They appear to be space-agency composite images; source and credit lines are to be confirmed by the owner.

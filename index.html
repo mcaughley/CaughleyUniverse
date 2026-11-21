@@ -424,7 +424,13 @@ function startAudio() {
   swell.connect(swellAmt); swellAmt.connect(drone.gain); swell.start();
   // 40+40: the tone can be switched on and off 40 times a second
   pulser = ctx.createGain(); pulser.gain.value = 1;
-  const lfo40 = ctx.createOscillator(); lfo40.type = 'sine'; lfo40.frequency.value = 40;
+  // a short burst of the tone every 25 ms: 1 ms fade in, 3 ms on, 1 ms fade out, then silence
+  const cyc = sr / 40, envBuf = ctx.createBuffer(1, Math.round(cyc * 2), sr), env = envBuf.getChannelData(0);
+  for (let i = 0; i < env.length; i++) {
+    const ms = ((i % cyc) / sr) * 1000;
+    env[i] = ms < 1 ? 0.5 - 0.5 * Math.cos(Math.PI * ms) : ms < 4 ? 1 : ms < 5 ? 0.5 + 0.5 * Math.cos(Math.PI * (ms - 4)) : 0;
+  }
+  const lfo40 = ctx.createBufferSource(); lfo40.buffer = envBuf; lfo40.loop = true;
   pulseDepth = ctx.createGain(); pulseDepth.gain.value = 0;
   lfo40.connect(pulseDepth); pulseDepth.connect(pulser.gain); lfo40.start();
   drone.connect(pulser); pulser.connect(master);
@@ -449,9 +455,9 @@ function setForty(on) {
   $('fOff').classList.toggle('on', !on);
   if (audioCtx) {
     const now = audioCtx.currentTime;
-    // gain swings between 0 and 1 at 40 Hz when on; steady 1 when off
-    pulser.gain.setTargetAtTime(on ? 0.5 : 1, now, 0.05);
-    pulseDepth.gain.setTargetAtTime(on ? 0.5 : 0, now, 0.05);
+    // on: silence except for the 40-per-second bursts (a little louder, as they are so short); off: steady tone
+    pulser.gain.setTargetAtTime(on ? 0 : 1, now, 0.05);
+    pulseDepth.gain.setTargetAtTime(on ? 1.5 : 0, now, 0.05);
   }
   material.uniforms.uRest.value = on ? 0.8 : 0;
   pulseAmps.fill(0); voiceOn = false;      // clear any waves in flight

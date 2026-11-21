@@ -247,34 +247,39 @@ const starMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
 });
 {
-  // "Belles Place", written in small stars: behind your right shoulder and a little above the horizon
+  // Three sets of initials, each written in small stars in a different part of the sky
   const GLYPHS = {
     B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
-    e: ['00000', '00000', '01110', '10001', '11111', '10000', '01110'],
-    l: ['01100', '00100', '00100', '00100', '00100', '00100', '01110'],
-    s: ['00000', '00000', '01111', '10000', '01110', '00001', '11110'],
     P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
-    a: ['00000', '00000', '01110', '00001', '01111', '10001', '01111'],
-    c: ['00000', '00000', '01110', '10001', '10000', '10001', '01110'],
-    ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000']
+    M: ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
+    C: ['01110', '10001', '10000', '10000', '10000', '10001', '01110'],
+    L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
+    T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+    K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001']
   };
-  const TEXT = 'Belles Place', CELL = 0.4 * Math.PI / 180, AZ = 140 * Math.PI / 180, EL = 30 * Math.PI / 180;
-  const fw = [-Math.sin(AZ) * Math.cos(EL), Math.sin(EL), -Math.cos(AZ) * Math.cos(EL)];
-  const rt = [Math.cos(AZ), 0, -Math.sin(AZ)];
-  const up = [Math.sin(AZ) * Math.sin(EL), Math.cos(EL), Math.cos(AZ) * Math.sin(EL)];
-  const dots = [];
-  for (let ci = 0; ci < TEXT.length; ci++) {
-    const g = GLYPHS[TEXT[ci]];
-    for (let row = 0; row < 7; row++) for (let col = 0; col < 5; col++) {
-      if (g[row][col] !== '1') continue;
-      // a little unevenness, so it reads as stars that happen to line up
-      const x = (ci * 6 + col - (TEXT.length * 6 - 1) / 2 + (Math.random() - 0.5) * 0.3) * CELL;
-      const y = (3 - row + (Math.random() - 0.5) * 0.3) * CELL;
-      const d = [fw[0] + rt[0] * x + up[0] * y, fw[1] + rt[1] * x + up[1] * y, fw[2] + rt[2] * x + up[2] * y];
-      const len = Math.hypot(d[0], d[1], d[2]);
-      dots.push([d[0] / len * 140, d[1] / len * 140, d[2] / len * 140]);
+  const CELL = 0.4 * Math.PI / 180, dots = [];
+  // az: degrees round to your left from where you first face; el: degrees above (+) or below (-) the horizon
+  function writeStars(text, azDeg, elDeg) {
+    const AZ = azDeg * Math.PI / 180, EL = elDeg * Math.PI / 180;
+    const fw = [-Math.sin(AZ) * Math.cos(EL), Math.sin(EL), -Math.cos(AZ) * Math.cos(EL)];
+    const rt = [Math.cos(AZ), 0, -Math.sin(AZ)];
+    const up = [Math.sin(AZ) * Math.sin(EL), Math.cos(EL), Math.cos(AZ) * Math.sin(EL)];
+    for (let ci = 0; ci < text.length; ci++) {
+      const g = GLYPHS[text[ci]];
+      for (let row = 0; row < 7; row++) for (let col = 0; col < 5; col++) {
+        if (g[row][col] !== '1') continue;
+        // a little unevenness, so it reads as stars that happen to line up
+        const x = (ci * 6 + col - (text.length * 6 - 1) / 2 + (Math.random() - 0.5) * 0.3) * CELL;
+        const y = (3 - row + (Math.random() - 0.5) * 0.3) * CELL;
+        const d = [fw[0] + rt[0] * x + up[0] * y, fw[1] + rt[1] * x + up[1] * y, fw[2] + rt[2] * x + up[2] * y];
+        const len = Math.hypot(d[0], d[1], d[2]);
+        dots.push([d[0] / len * 140, d[1] / len * 140, d[2] / len * 140]);
+      }
     }
   }
+  writeStars('BPMC', 140, 30);       // behind your right shoulder, a little above the horizon
+  writeStars('CLTC', 250, -25);      // round to your right, below the horizon
+  writeStars('MKBC', 20, 55);        // high up, just left of straight ahead
   const TOTAL = STARS + dots.length;
   const sPos = new Float32Array(TOTAL * 3), sSize = new Float32Array(TOTAL), sSeed = new Float32Array(TOTAL);
   dots.forEach((d, i) => {

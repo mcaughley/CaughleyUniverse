@@ -259,6 +259,9 @@ const starMat = new THREE.ShaderMaterial({
     L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
     T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
     K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
+    S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+    H: ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
+    J: ['00111', '00010', '00010', '00010', '00010', '10010', '01100'],
     W: ['10001', '10001', '10001', '10101', '10101', '11011', '10001'],
     E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
     O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
@@ -320,6 +323,18 @@ const starMat = new THREE.ShaderMaterial({
 
   writeStars('CLTC', 250, -25);      // round to your right, below the horizon
   writeStars('MKBC', 20, 55);        // high up, just left of straight ahead
+  // more names, each in its own heart, spread around the rest of the sky.
+  // The heart is sized to the writing: one line, or several lines for a long name.
+  function nameInHeart(lines, azDeg, elDeg) {
+    const longest = Math.max(...lines.map(l => l.length));
+    lines.forEach((t, i) => writeStars(t, azDeg, elDeg, i));
+    if (lines.length === 1) heartStars(azDeg, elDeg, Math.max(0.9, (longest * 3 + 4.5) / 14));
+    else heartStars(azDeg, elDeg, longest * 0.235, (lines.length - 1) * 5);
+  }
+  [[['BCRANE'], 60, 15], [['ICRANE'], 95, -20], [['MT'], 108, 56], [['DC'], 170, -10],
+   [['SHE WHO', 'DOES NOT', 'ACKNOWLEDGE'], 188, 40], [['MJBC'], 215, 0], [['BJTC'], 243, 47], [['JC'], 285, 20],
+   [['WITG'], 300, -35], [['YOSHUA'], 320, 45], [['MADMAD'], 328, -12], [['PC'], 55, -45], [['KMC'], 180, -50]
+  ].forEach(([lines, az, el]) => nameInHeart(lines, az, el));
   // the message, in three lines inside its heart: straight ahead when you arrive
   bigFrom = dots.length; cellK = 0.8;
   ["WE LOVE YOU", "AND DON'T YOU", "FORGET IT"].forEach((t, i) => writeStars(t, 0, 5, i));

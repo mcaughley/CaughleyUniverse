@@ -6,7 +6,7 @@
 <title>Caughley Universe</title>
 <script>
 // Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
-const BUILD = '22 Nov 11.39pm';
+const BUILD = '22 Nov 11.42pm';
 function checkVersion() {
   fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
     v = v.trim();
@@ -1560,6 +1560,8 @@ $('go').addEventListener('click', async () => {
   setMode(mic ? 'voice' : 'sim');
   // a track you chose on an earlier visit is still here
   let mine = false;
+  // one time only: every device goes back to opening with the site's own music (an earlier own-track choice stays in the list)
+  try { if (localStorage.getItem('openReset') !== '1') { localStorage.setItem('ownOpen', '0'); localStorage.setItem('openReset', '1'); } } catch (err) {}
   try { const sv = await ownSaved(); if (sv) { await ownLoad(sv.name, sv.data); mine = ownOpen(); } } catch (err) {}
   // the Universe opens with music playing (your own track if that is what you last chose, otherwise the sound of the Tokyo crystal room), and the tone silent until you raise it
   if (!lat) { setSound(true); setScape(mine ? 'own' : 'crystal'); }

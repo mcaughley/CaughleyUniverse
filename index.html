@@ -6,7 +6,7 @@
 <title>Caughley Universe</title>
 <script>
 // Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
-const BUILD = '22 Nov 7.43pm';
+const BUILD = '22 Nov 8.45pm';
 function checkVersion() {
   fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
     v = v.trim();
@@ -628,7 +628,7 @@ function densAt(x, y, z) {          // the map's value (0 to 1) at a place, in m
         vec3 rel = mod(aPos - uCamN + ${(REG / 2).toFixed(1)}, ${REG.toFixed(1)}) - ${(REG / 2).toFixed(1)};
         float d = length(rel);
         // seen from up to 70 m away; a cloud thins out as you pass through it, so it never blanks the view
-        vA = (1.0 - smoothstep(38.0, 70.0, d)) * smoothstep(0.22 * aSR.x, 0.85 * aSR.x, d) * uOn;
+        vA = (1.0 - smoothstep(38.0, 70.0, d)) * smoothstep(0.3 * aSR.x, 1.15 * aSR.x, d) * uOn;
         vec4 mv = modelViewMatrix * vec4(rel, 1.0);
         float c = cos(aSR.y), s = sin(aSR.y);
         mv.xy += vec2(position.x * c - position.y * s, position.x * s + position.y * c) * aSR.x;
@@ -643,7 +643,7 @@ function densAt(x, y, z) {          // the map's value (0 to 1) at a place, in m
       void main() {
         float r = length(vP);
         float f = exp(-r * r * 2.6) * (1.0 - smoothstep(0.65, 1.0, r));
-        gl_FragColor = vec4(texture2D(uTex, vUv).rgb * 1.7, f * vA * 0.55);
+        gl_FragColor = vec4(texture2D(uTex, vUv).rgb * 1.5, f * vA * 0.36);
       }
     `,
     transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending

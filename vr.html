@@ -6,7 +6,7 @@
 <title>Caughley Universe</title>
 <script>
 // Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
-const BUILD = '22 Nov 9.56pm';
+const BUILD = '22 Nov 10.31pm';
 function checkVersion() {
   fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
     v = v.trim();
@@ -181,6 +181,7 @@ const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.6
 // A fourth entry is a ready-made seamless loop (with its length in samples at 44.1 kHz): it is played end to start with no fade.
 const SCAPES = {
   off: ['Off'],
+  crystal: ['Crystal Universe (teamLab)', 'crystal.mp3', 0.62, 'crystal-loop.flac', 4233600],
   stream: ['Water stream', 'stream.mp3', 2.4], water: ['Water', 'water.mp3', 5.0],
   waterfall: ['Waterfall', 'waterfall.mp3', 3.2], mtnfall: ['Mountain waterfall', 'mountain-waterfall.mp3', 1.2],
   beach: ['Beach', 'beach.mp3', 1.3], forest: ['Forest', 'forest.mp3', 1.6], forestbath: ['Forest bath', 'forest-bath.mp3', 1.9],
@@ -1585,8 +1586,8 @@ $('go').addEventListener('click', async () => {
   // a track you chose on an earlier visit is still here
   let mine = false;
   try { const sv = await ownSaved(); if (sv) { await ownLoad(sv.name, sv.data); mine = ownOpen(); } } catch (err) {}
-  // the Universe opens with music playing (your own track if that is what you last chose, otherwise the binaural piece), and the tone silent until you raise it
-  if (!lat) { setSound(true); setScape(mine ? 'own' : 'velvet'); }
+  // the Universe opens with music playing (your own track if that is what you last chose, otherwise the sound of the Tokyo crystal room), and the tone silent until you raise it
+  if (!lat) { setSound(true); setScape(mine ? 'own' : 'crystal'); }
   try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (err) {}
   $('start').style.display = 'none';
   panel.style.display = 'block';

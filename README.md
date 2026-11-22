@@ -9,6 +9,8 @@ One page serves phone, PC and headset:
 
 ## Soundscapes
 
+- crystal, crystal-loop: the sound of teamLab's *The Infinite Crystal Universe* (teamLab, 2018; sound: teamLab), looped. Used with teamLab's permission, as advised by the site owner.
+
 The recordings in `sounds/` were supplied by the project owner as free, royalty-free downloads.
 Original file names, which carry the creators' names:
 

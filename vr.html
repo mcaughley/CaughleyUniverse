@@ -43,6 +43,10 @@ body[data-active="breath"] .note.opt-breath,body[data-active="hum"] .note.opt-hu
 body[data-active="bin"] .note.opt-bin{display:block}
 input[type=color]{width:44px;height:30px;padding:0;border:1px solid #35607f;border-radius:8px;background:none;flex:none}
 select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #35607f;background:#06101c;color:#9fd8ff;font-size:13px}
+.pick{font-size:11px;letter-spacing:.28em;color:#6f9fc4;margin-top:10px}
+#realmRow button{padding:14px 8px;border-radius:14px;font-size:16px;white-space:normal;line-height:1.3}
+#realmRow button small{display:block;font-size:11px;opacity:.8;margin-top:3px}
+.rule{width:100%;max-width:420px;height:1px;background:#1b3348;margin-top:8px}
 .note{color:#6f9fc4;font-size:12px;line-height:1.4;margin:4px 0}
 </style>
 </head>
@@ -50,9 +54,12 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
 <div id="start">
   <h1>CAUGHLEY UNIVERSE</h1>
   <p id="intro">A universe of lights that never ends, with waves of light that answer your voice. Swipe to look around. You drift the way you face: touch and hold to travel faster.</p>
+  <div class="pick">1 &nbsp;CHOOSE YOUR WORLD</div>
   <div class="modes" id="realmRow" style="max-width:420px;width:100%;flex:none">
-    <button data-realm="universe">Universe</button><button data-realm="lattice">Lattice</button>
+    <button data-realm="universe">Universe<small>Stars, nebula, empty space</small></button><button data-realm="lattice">Lattice<small>The perfect grid, nothing else</small></button>
   </div>
+  <div class="rule"></div>
+  <div class="pick">2 &nbsp;WHAT ARE YOU USING?</div>
   <div class="modes" id="devRow" style="max-width:420px;width:100%;flex:none">
     <button data-dev="phone">Phone</button><button data-dev="pc">PC</button><button data-dev="vr">VR</button>
   </div>

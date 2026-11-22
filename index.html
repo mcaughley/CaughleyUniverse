@@ -333,7 +333,8 @@ const starMat = new THREE.ShaderMaterial({
   }
   [[['BCRANE'], 60, 15], [['ICRANE'], 95, -20], [['MT'], 108, 56], [['DC'], 170, -10],
    [['SHE WHO', 'DOES NOT', 'ACKNOWLEDGE'], 188, 40], [['MJBC'], 215, 0], [['BJTC'], 243, 47], [['JC'], 285, 20],
-   [['WITG'], 300, -35], [['YOSHUA'], 320, 45], [['MADMAD'], 328, -12], [['PC'], 55, -45], [['KMC'], 180, -50]
+   [['WITG'], 300, -35], [['YOSHUA'], 320, 45], [['MADMAD'], 328, -12], [['PC'], 55, -45], [['KMC'], 180, -50],
+   [['GMA'], 35, -28], [['GDAD'], 270, -5]
   ].forEach(([lines, az, el]) => nameInHeart(lines, az, el));
   // the message, in three lines inside its heart: straight ahead when you arrive
   bigFrom = dots.length; cellK = 0.8;
@@ -578,7 +579,8 @@ function buildLattice() {
       uSpeed: { value: cfg.speed }, uWidth: { value: cfg.width }, uEmber: { value: cfg.ember },
       uLevel: { value: 0 }, uRest: { value: 0 }, uFlick: { value: 1 }, uPx: { value: 20 },
       uSetCol: { value: setCol }, uSetMix: { value: 0 },
-      uLightMode: { value: 0 }, uLightCol: { value: lightCol }, uWhite: { value: 1 }
+      uLightMode: { value: 0 }, uLightCol: { value: lightCol }, uWhite: { value: 1 },
+      uFront: { value: 0 }, uFwd: { value: drift }
     },
     vertexShader: `
       uniform float uTime;
@@ -599,6 +601,8 @@ function buildLattice() {
       uniform float uRest;
       uniform float uFlick;
       uniform float uPx;
+      uniform float uFront;         // how far ahead the drift's light front sits, in metres (0 = off)
+      uniform vec3 uFwd;            // the way you are travelling
       uniform float uLightMode;     // 0 natural, 1 one colour, 2 multi
       uniform vec3 uLightCol;
       varying float vGlow;
@@ -641,6 +645,12 @@ function buildLattice() {
         vec3 h0 = rel - uHand[0], h1 = rel - uHand[1];
         float near = 0.3 * uLevel * exp(-d / 5.0) + uRest
                    + 0.5 * (exp(-dot(h0, h0) / (0.45 * uPitch * uPitch)) + exp(-dot(h1, h1) / (0.45 * uPitch * uPitch)));
+        if (uFront > 0.05) {
+          // lights ahead of you light up: brightest in a shell at the front, with a fainter glow between you and it
+          float ahead = smoothstep(0.05, 0.65, dot(rel, uFwd) / max(d, 0.001));
+          float off = (d - uFront) / (0.14 * uFront + 0.5);
+          near += ahead * (0.95 * exp(-off * off) + 0.16 * (1.0 - smoothstep(0.0, uFront, d)));
+        }
         acc += near * hue(d);
         g += near;
         vec3 multi = acc / max(g, 0.0001);
@@ -1253,7 +1263,7 @@ $('go').addEventListener('click', async () => {
   setTimeout(() => {
     if (device === 'vr') {
       lookMsg = HEADSETS[headset].label + ': ' + lightCount.toLocaleString() + ' lights per block. ' + (vrSupported
-        ? 'Set things up here, then press Enter VR. In VR: right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. The A button turns 40+40 on and off once you have accepted its warning here.'
+        ? 'Set things up here, then press Enter VR. In VR, Jitter at 0 turns every light on; any Jitter leaves them dark except for a front of light pushed ahead by your travel, further ahead the faster you go. Right thumbstick forward to travel faster, back to stop. Reach out or pull a trigger to touch a light. The A button turns 40+40 on and off once you have accepted its warning here.'
         : 'This browser cannot start VR. Open this page in the headset\'s own browser. Until then this is a preview: drag to look.');
     } else if (device === 'phone') {
       lookMsg = 'Swipe to look around. ' + (sensorEvents > 0 ? 'To steer by moving the phone instead, choose Display, Look by, Moving phone. ' : '') + 'Tap the screen to show or hide the menus.';
@@ -1281,7 +1291,7 @@ $('enterVR').addEventListener('click', async () => {
 
 // ---- Animation loop ----
 const fwd = new THREE.Vector3(), quat = new THREE.Quaternion(), tmp = new THREE.Vector3();
-let lastT = 0, lastFrame = 0, uiTimer = 0, boostAxis = 0, aWas = false, mixNow = 0, restNow = 0;
+let lastT = 0, lastFrame = 0, uiTimer = 0, boostAxis = 0, aWas = false, mixNow = 0, restNow = 0, frontNow = 0, forceFront = false;
 const colNow = [1, 1, 1];
 const ease = x => x * x * (3 - 2 * x);
 renderer.setAnimationLoop((ms, frame) => {
@@ -1336,13 +1346,16 @@ renderer.setAnimationLoop((ms, frame) => {
   if (aNow && !aWas && fortyAccepted) setSet(set === 'forty' ? 'pulse' : 'forty');
   aWas = aNow;
 
-  // waves: off in 40+40 and Slow breath, where the lights follow the Set instead
-  const waves = set !== 'forty' && set !== 'breath';
+  // In VR there are two ways to see the lattice. With Jitter at 0 every light is on and you explore the grid.
+  // With any Jitter the lights are dark except for a front of light your travel pushes ahead of you.
+  const vrFront = (inVR || forceFront) && cfg.jitter > 0, vrAllOn = (inVR || forceFront) && cfg.jitter === 0;
+  // waves: off in 40+40 and Slow breath, where the lights follow the Set instead, and in the VR light-front mode
+  const waves = set !== 'forty' && set !== 'breath' && !vrFront;
   if (cfg.mode === 'voice') driveVoice(t, dt, waves);
   else if (waves) driveSim(t);
 
   // what the Set does to the lights
-  let rest = cfg.lights === 'always' ? 0.3 : 0, mixT = 0, col = colNow, flick = 1;
+  let rest = (vrAllOn || (cfg.lights === 'always' && !vrFront)) ? 0.3 : 0, mixT = 0, col = colNow, flick = 1;
   if (set === 'water') rest = Math.max(rest, 0.3);
   if (set === 'forty') {
     rest = 0.8;
@@ -1382,6 +1395,11 @@ renderer.setAnimationLoop((ms, frame) => {
   boostHold += ((holding && moved < 14 ? 1 : 0) - boostHold) * Math.min(1, dt * 3);
   const v = Math.max(0, cfg.drift + boostAxis * 6 + boostHold * 4);
   drift.copy(fwd);
+  // the faster you travel, the further ahead the light front reaches (up to most of the visible lattice)
+  const reach = SIZE / 2 * cfg.pitch * 0.85;
+  const frontT = (vrFront && set !== 'forty' && set !== 'breath') ? reach * (1 - Math.exp(-v / 5)) : 0;
+  frontNow += (frontT - frontNow) * Math.min(1, dt * 2.5);
+  material.uniforms.uFront.value = frontNow;
   cam.x += fwd.x * v * dt; cam.y += fwd.y * v * dt; cam.z += fwd.z * v * dt;
 
   // everything is drawn around your head; your place in the lattice is travel plus real movement
@@ -1429,6 +1447,7 @@ window.pulseLattice = {
   touch: (x, y, z) => touchAt(cam.x + x, cam.y + y, cam.z + z, clock.getElapsedTime()),
   near: (x, y, z) => Array.from(nearestLight(x, y, z)),
   hideLattice: v => { cloud.visible = !v; },
+  vrLights: v => { forceFront = v; },
   dir: () => { const v = new THREE.Vector3(); camera.getWorldDirection(v); return [v.x, v.y, v.z]; },
   goto: (x, y, z) => { cam.x = x; cam.y = y; cam.z = z; },
   look: (yawDeg, pitchDeg) => { yaw = yawDeg * Math.PI / 180; pitch = pitchDeg * Math.PI / 180; },

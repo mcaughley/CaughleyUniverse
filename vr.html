@@ -6,7 +6,7 @@
 <title>Caughley Universe</title>
 <script>
 // Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
-const BUILD = '22 Nov 8.45pm';
+const BUILD = '22 Nov 9.09pm';
 function checkVersion() {
   fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
     v = v.trim();
@@ -359,7 +359,7 @@ const starMat = new THREE.ShaderMaterial({
   [[['BCRANE'], 60, 15], [['ICRANE'], 95, -20], [['MT'], 108, 56], [['DC'], 170, -10],
    [['SHE WHO', 'DOES NOT', 'ACKNOWLEDGE'], 188, 40], [['MJBC'], 215, 0], [['BJTC'], 243, 47], [['JC'], 285, 20],
    [['WITG'], 300, -35], [['YOSHUA'], 320, 45], [['MADMAD'], 328, -12], [['PC'], 55, -45], [['KMC'], 180, -50],
-   [['GMA'], 35, -28], [['GDAD'], 270, -5]
+   [['GMA'], 35, -28], [['GDAD'], 270, -5], [['PKB'], 135, -42]
   ].forEach(([lines, az, el]) => nameInHeart(lines, az, el));
   // the message, in three lines inside its heart: straight ahead when you arrive
   bigFrom = dots.length; cellK = 0.8;

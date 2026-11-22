@@ -6,7 +6,7 @@
 <title>Caughley Universe</title>
 <script>
 // Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
-const BUILD = '22 Nov 11.20pm';
+const BUILD = '22 Nov 11.39pm';
 function checkVersion() {
   fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
     v = v.trim();

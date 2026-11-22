@@ -6,7 +6,7 @@
 <title>Caughley Universe</title>
 <script>
 // Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
-const BUILD = '22 Nov 9.09pm';
+const BUILD = '22 Nov 9.16pm';
 function checkVersion() {
   fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
     v = v.trim();
@@ -19,11 +19,14 @@ document.addEventListener('visibilitychange', () => { const s = document.getElem
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif;color:#9fd8ff;touch-action:none;-webkit-user-select:none;user-select:none}
 canvas{display:block}
-#start,#warn{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000;z-index:10;text-align:center;padding:24px;overflow-y:auto;touch-action:pan-y;justify-content:safe center}
-#start>*,#warn>*{flex-shrink:0}
-#warn{display:none;background:rgba(0,0,0,.94);z-index:20}
-#start h1,#warn h1{font-weight:200;letter-spacing:.3em;font-size:20px;margin:0}
-#start p,#warn p{margin:0;max-width:420px;font-size:14px;line-height:1.5;color:#6f9fc4}
+#start,#warn,#note{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000;z-index:10;text-align:center;padding:24px;overflow-y:auto;touch-action:pan-y;justify-content:safe center}
+#start>*,#warn>*,#note>*{flex-shrink:0}
+#warn,#note{display:none;background:rgba(0,0,0,.94);z-index:20}
+#note input,#note textarea{width:100%;max-width:340px;box-sizing:border-box;padding:12px 14px;border-radius:14px;border:1px solid #35607f;background:#06101c;color:#cfe9ff;font:16px system-ui,sans-serif;-webkit-user-select:text;user-select:text}
+#note textarea{height:120px;resize:none}
+#note a.big{text-decoration:none;display:inline-block}
+#start h1,#warn h1,#note h1{font-weight:200;letter-spacing:.3em;font-size:20px;margin:0}
+#start p,#warn p,#note p{margin:0;max-width:420px;font-size:14px;line-height:1.5;color:#6f9fc4}
 .big{font-size:17px;padding:14px 34px;border-radius:30px;border:1px solid #9fd8ff;background:transparent;color:#9fd8ff}
 #enterVR{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:5;display:none;background:#9fd8ff;color:#001018}
 #cue{position:fixed;top:18%;left:0;right:0;text-align:center;font-size:22px;font-weight:200;letter-spacing:.15em;color:#cfe9ff;pointer-events:none;text-shadow:0 0 12px #000;display:none}
@@ -89,6 +92,21 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
   <p>Do not use it if you, or anyone who can see the screen, has epilepsy or is sensitive to flashing light. Stop if you feel unwell.</p>
   <p>It is an art effect. It is not a medical device or a treatment.</p>
   <div class="modes" style="max-width:300px;width:100%;flex:none"><button id="warnNo">Cancel</button><button id="warnYes" class="on">Start</button></div>
+</div>
+<div id="note">
+  <h1>PKB</h1>
+  <div id="noteA" style="display:flex;flex-direction:column;align-items:center;gap:14px;width:100%">
+    <p>Enter the code to open this.</p>
+    <input id="noteEmail" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Code">
+    <p id="noteMsg" style="min-height:1.5em"></p>
+    <div class="modes" style="max-width:300px;width:100%;flex:none"><button id="noteNo">Close</button><button id="noteGo" class="on">Open</button></div>
+  </div>
+  <div id="noteB" style="display:none;flex-direction:column;align-items:center;gap:14px;width:100%">
+    <p>Write your message. Send opens your phone's own Messages app with it ready to go.</p>
+    <textarea id="noteText" placeholder="Your message"></textarea>
+    <a id="noteSend" class="big" href="#">Send text</a>
+    <div class="modes" style="max-width:300px;width:100%;flex:none"><button id="noteNo2">Close</button></div>
+  </div>
 </div>
 <button id="enterVR" class="big">Enter VR</button>
 <div id="cue"></div>
@@ -247,6 +265,19 @@ function setLightColour(mode) {
   }
 }
 
+// ---- A message to send: tapping PKB's heart asks for a code. The right one unlocks the number a text goes to.
+// The number is stored locked, with the code as its key, so neither can be read from this page.
+const PKB_AT = [135, -42], pkbDir = new THREE.Vector3();
+const PKB_LOCK = {"salt":"lcGSXwzDvYK25ZlnnXlytA==","iv":"RPdyxWEGAURux4ta","data":"HexXYdJfoko2vQhl+K+ifRbBv3GqDKiDPGfwQw=="};
+// spaces, dashes, capitals and the order of the digits and letters do not matter
+const codeKey = v => { let d = v.replace(/\D/g, ''); if (d.startsWith('61')) d = '0' + d.slice(2); return d + v.replace(/[^a-z]/gi, '').toUpperCase(); };
+async function unlockNumber(email) {
+  const dec = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0));
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(codeKey(email)), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: dec(PKB_LOCK.salt), iterations: 300000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: dec(PKB_LOCK.iv) }, key, dec(PKB_LOCK.data)));   // fails unless the code is right
+}
+
 // ---- Far stars ----
 const universeOnly = [];             // everything that belongs to the Universe world and is hidden in the Lattice world
 const STARS = 2600;
@@ -348,6 +379,8 @@ const starMat = new THREE.ShaderMaterial({
 
   writeStars('CLTC', 250, -25);      // round to your right, below the horizon
   writeStars('MKBC', 20, 55);        // high up, just left of straight ahead
+  // PKB's heart can be tapped: remember which way it lies
+  { const AZ = PKB_AT[0] * Math.PI / 180, EL = PKB_AT[1] * Math.PI / 180; pkbDir.set(-Math.sin(AZ) * Math.cos(EL), Math.sin(EL), -Math.cos(AZ) * Math.cos(EL)); }
   // more names, each in its own heart, spread around the rest of the sky.
   // The heart is sized to the writing: one line, or several lines for a long name.
   function nameInHeart(lines, azDeg, elDeg) {
@@ -359,7 +392,7 @@ const starMat = new THREE.ShaderMaterial({
   [[['BCRANE'], 60, 15], [['ICRANE'], 95, -20], [['MT'], 108, 56], [['DC'], 170, -10],
    [['SHE WHO', 'DOES NOT', 'ACKNOWLEDGE'], 188, 40], [['MJBC'], 215, 0], [['BJTC'], 243, 47], [['JC'], 285, 20],
    [['WITG'], 300, -35], [['YOSHUA'], 320, 45], [['MADMAD'], 328, -12], [['PC'], 55, -45], [['KMC'], 180, -50],
-   [['GMA'], 35, -28], [['GDAD'], 270, -5], [['PKB'], 135, -42]
+   [['GMA'], 35, -28], [['GDAD'], 270, -5], [['PKB'], PKB_AT[0], PKB_AT[1]]
   ].forEach(([lines, az, el]) => nameInHeart(lines, az, el));
   // the message, in three lines inside its heart: straight ahead when you arrive
   bigFrom = dots.length; cellK = 0.8;
@@ -1205,7 +1238,8 @@ renderer.domElement.addEventListener('pointerdown', e => {
 });
 addEventListener('pointerup', () => {
   if (holding && performance.now() - downAt < 280 && moved < 12) {
-    if (panel.classList.contains('away')) showPanel(); else panel.classList.add('away');
+    if (tapOnPKB(lx, ly)) openNote();
+    else if (panel.classList.contains('away')) showPanel(); else panel.classList.add('away');
   }
   dragging = false; holding = false;
 });
@@ -1223,6 +1257,38 @@ addEventListener('pointermove', e => {
   }
   lx = e.clientX; ly = e.clientY;
 });
+
+// ---- Tapping PKB's heart ----
+const tapRay = new THREE.Vector3();
+function tapOnPKB(x, y) {
+  if (!PKB_LOCK || realm !== 'universe' || renderer.xr.isPresenting) return false;
+  camera.updateMatrixWorld();
+  tapRay.set(x / innerWidth * 2 - 1, 1 - y / innerHeight * 2, 0.5).unproject(camera).sub(camera.getWorldPosition(tmpV)).normalize();
+  return tapRay.dot(pkbDir) > Math.cos(7 * Math.PI / 180);      // within 7 degrees of the middle of the heart
+}
+const tmpV = new THREE.Vector3();
+let noteNumber = '';
+function openNote() {
+  $('noteA').style.display = 'flex'; $('noteB').style.display = 'none';
+  $('noteMsg').textContent = ''; $('noteEmail').value = ''; $('noteText').value = '';
+  $('note').style.display = 'flex';
+}
+function closeNote() { $('note').style.display = 'none'; noteNumber = ''; $('noteSend').href = '#'; }
+$('noteNo').addEventListener('click', closeNote);
+$('noteNo2').addEventListener('click', closeNote);
+async function tryNote() {
+  $('noteMsg').textContent = 'Checking...';
+  try {
+    noteNumber = await unlockNumber($('noteEmail').value);
+    $('noteA').style.display = 'none'; $('noteB').style.display = 'flex';
+    setNoteLink();
+  } catch (err) { $('noteMsg').textContent = 'That code does not open this.'; }
+}
+// "?&body=" is the form both Android and iPhone accept
+function setNoteLink() { $('noteSend').href = 'sms:' + noteNumber + '?&body=' + encodeURIComponent($('noteText').value); }
+$('noteGo').addEventListener('click', tryNote);
+$('noteEmail').addEventListener('keydown', e => { if (e.key === 'Enter') tryNote(); });
+$('noteText').addEventListener('input', setNoteLink);
 
 // ---- Menus ----
 function openTab(name) {

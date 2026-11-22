@@ -6,7 +6,7 @@
 <title>Caughley Universe</title>
 <script>
 // Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
-const BUILD = '22 Nov 7.36pm';
+const BUILD = '22 Nov 7.43pm';
 function checkVersion() {
   fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
     v = v.trim();
@@ -19,7 +19,8 @@ document.addEventListener('visibilitychange', () => { const s = document.getElem
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif;color:#9fd8ff;touch-action:none;-webkit-user-select:none;user-select:none}
 canvas{display:block}
-#start,#warn{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000;z-index:10;text-align:center;padding:24px}
+#start,#warn{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000;z-index:10;text-align:center;padding:24px;overflow-y:auto;touch-action:pan-y;justify-content:safe center}
+#start>*,#warn>*{flex-shrink:0}
 #warn{display:none;background:rgba(0,0,0,.94);z-index:20}
 #start h1,#warn h1{font-weight:200;letter-spacing:.3em;font-size:20px;margin:0}
 #start p,#warn p{margin:0;max-width:420px;font-size:14px;line-height:1.5;color:#6f9fc4}
@@ -1009,19 +1010,22 @@ function setScape(key) {
   applyScapeVol();
 }
 let scapeMsg = '';
+const FADE_OUT = Float32Array.from({ length: 65 }, (_, i) => Math.cos(i / 64 * Math.PI / 2));
+const FADE_IN = Float32Array.from({ length: 65 }, (_, i) => Math.sin(i / 64 * Math.PI / 2));
 // near the end of the recording, start the other player from the top and fade across
 setInterval(() => {
   if (!audioCtx || cfg.scape === 'off' || crossing) return;
   const a = players[curPlayer], d = a.el.duration;
   if (!d || !isFinite(d)) return;
-  const x = Math.min(3, d / 4);
+  const x = Math.min(4, d / 4);
   if (d - a.el.currentTime <= x + 0.15) {
     const b = players[1 - curPlayer], now = audioCtx.currentTime;
     crossing = true;
     b.el.currentTime = 0;
     b.el.play().catch(() => {});
-    a.g.gain.setValueAtTime(1, now); a.g.gain.linearRampToValueAtTime(0, now + x);
-    b.g.gain.setValueAtTime(0, now); b.g.gain.linearRampToValueAtTime(1, now + x);
+    // an equal-power fade: the two together stay at the same loudness all the way across
+    a.g.gain.cancelScheduledValues(now); a.g.gain.setValueCurveAtTime(FADE_OUT, now, x);
+    b.g.gain.cancelScheduledValues(now); b.g.gain.setValueCurveAtTime(FADE_IN, now, x);
     const key = cfg.scape;
     setTimeout(() => { if (cfg.scape === key && crossing) { a.el.pause(); curPlayer = 1 - curPlayer; crossing = false; } }, x * 1000 + 200);
   }

@@ -6,7 +6,7 @@
 <title>Caughley Universe</title>
 <script>
 // Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
-const BUILD = '22 Nov 9.16pm';
+const BUILD = '22 Nov 9.27pm';
 function checkVersion() {
   fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
     v = v.trim();
@@ -176,14 +176,15 @@ const cfg = { bpm: 60, speed: 6.0, width: 0.3, ember: 0.9, mode: 'sim', sens: 6,
 // Breathing patterns, in seconds: in, hold, out, hold
 const PATTERNS = { coh: [5, 0, 5, 0], box: [4, 4, 4, 4], '478': [4, 7, 8, 0] };
 const COL_IN = [0.35, 0.80, 1.00], COL_HOLD = [1.00, 0.80, 0.35], COL_OUT = [0.65, 0.48, 1.00], COL_FUCHSIA = [1.00, 0.08, 0.78];
-// Recorded soundscapes: name shown, file, and a level trim so they sit at a similar loudness
+// Recorded soundscapes: name shown, file, and a level trim so they sit at a similar loudness.
+// A fourth entry is a ready-made seamless loop (with its length in samples at 44.1 kHz): it is played end to start with no fade.
 const SCAPES = {
   off: ['Off'],
   stream: ['Water stream', 'stream.mp3', 2.4], water: ['Water', 'water.mp3', 5.0],
   waterfall: ['Waterfall', 'waterfall.mp3', 3.2], mtnfall: ['Mountain waterfall', 'mountain-waterfall.mp3', 1.2],
   beach: ['Beach', 'beach.mp3', 1.3], forest: ['Forest', 'forest.mp3', 1.6], forestbath: ['Forest bath', 'forest-bath.mp3', 1.9],
   field: ['Open field', 'open-field.mp3', 2.6], atmosphere: ['Atmosphere', 'atmosphere.mp3', 0.3],
-  therapy: ['Sound therapy', 'sound-therapy.mp3', 1.4], velvet: ['Velvet binaural (headphones)', 'velvet-binaural.mp3', 0.8]
+  therapy: ['Sound therapy', 'sound-therapy.mp3', 1.4], velvet: ['Velvet binaural (headphones)', 'velvet-binaural.mp3', 0.8, 'velvet-loop.flac', 1269771]
 };
 const $ = id => document.getElementById(id);
 const all = sel => Array.from(document.querySelectorAll(sel));
@@ -1023,13 +1024,47 @@ function setScape(key) {
   cfg.scape = key;
   $('scape').value = key;
   if (!audioCtx) return;
-  const now = audioCtx.currentTime;
-  crossing = false;
+  crossing = false; usingLoop = false;
   if (key === 'off') {
-    applyScapeVol();
-    setTimeout(() => { if (cfg.scape === 'off') players.forEach(p => p.el.pause()); }, 900);
+    applyScapeVol();          // fade out first, then stop
+    setTimeout(() => { if (cfg.scape === 'off') { players.forEach(p => p.el.pause()); stopLoop(); } }, 900);
     return;
   }
+  stopLoop();
+  if (SCAPES[key][3]) {
+    // a ready-made loop: load it whole and repeat it exactly, falling back to the two players if that fails
+    players.forEach(p => p.el.pause());
+    usingLoop = true;
+    applyScapeVol();
+    startLoop(key).then(ok => { if (!ok && cfg.scape === key) { usingLoop = false; playWithPlayers(key); } });
+    return;
+  }
+  playWithPlayers(key);
+}
+let loopSrc = null, usingLoop = false;
+const loopBufs = {}, LOOP_PAD = 0.25;      // the file carries a quarter second of the loop's other end on each side, so the join itself is never at the file's edge
+function stopLoop() {
+  if (loopSrc) { try { loopSrc.stop(); } catch (err) {} loopSrc.disconnect(); loopSrc = null; }
+}
+async function startLoop(key) {
+  try {
+    if (!loopBufs[key]) {
+      const r = await fetch('sounds/' + SCAPES[key][3]);
+      if (!r.ok) throw new Error('missing');
+      loopBufs[key] = await audioCtx.decodeAudioData(await r.arrayBuffer());
+    }
+    if (cfg.scape !== key) return true;
+    stopLoop();
+    const src = audioCtx.createBufferSource();
+    src.buffer = loopBufs[key]; src.loop = true;
+    src.loopStart = LOOP_PAD; src.loopEnd = LOOP_PAD + SCAPES[key][4] / 44100;
+    src.connect(scapeBus); src.start(0, LOOP_PAD);
+    loopSrc = src;
+    return true;
+  } catch (err) { return false; }
+}
+function playWithPlayers(key) {
+  const now = audioCtx.currentTime;
   const url = 'sounds/' + SCAPES[key][1];
   players.forEach((p, i) => {
     p.el.pause(); p.el.src = url;
@@ -1047,7 +1082,7 @@ const FADE_OUT = Float32Array.from({ length: 65 }, (_, i) => Math.cos(i / 64 * M
 const FADE_IN = Float32Array.from({ length: 65 }, (_, i) => Math.sin(i / 64 * Math.PI / 2));
 // near the end of the recording, start the other player from the top and fade across
 setInterval(() => {
-  if (!audioCtx || cfg.scape === 'off' || crossing) return;
+  if (!audioCtx || cfg.scape === 'off' || crossing || usingLoop) return;
   const a = players[curPlayer], d = a.el.duration;
   if (!d || !isFinite(d)) return;
   const x = Math.min(4, d / 4);
@@ -1713,7 +1748,7 @@ window.pulseLattice = {
   seekEnd: () => { const p = players[curPlayer].el; p.currentTime = Math.max(0, p.duration - 4.5); },
   region: (x, y, z) => { const q = densAt(cam.x + x + regOff[0], cam.y + y + regOff[1], cam.z + z + regOff[2]); return [q, q < tEmpty ? 'empty' : q > tNeb ? 'nebula' : 'stars']; },
   cuts: () => [tEmpty, tNeb],
-  state: () => ({ realm, jitter: cfg.jitter, lightCount, size: SIZE, faces: cfg.faces, set: cfg.set, mode: cfg.mode, lights: cfg.lights, water: cfg.scape, playing: players.map(p => [!p.el.paused, +p.el.currentTime.toFixed(1), +p.g.gain.value.toFixed(2)]), humT, mix: mixNow, rest: material ? material.uniforms.uRest.value : 0, col: colNow.slice(), fps })
+  state: () => ({ realm, jitter: cfg.jitter, lightCount, size: SIZE, faces: cfg.faces, set: cfg.set, mode: cfg.mode, lights: cfg.lights, water: cfg.scape, loop: !!loopSrc, playing: players.map(p => [!p.el.paused, +p.el.currentTime.toFixed(1), +p.g.gain.value.toFixed(2)]), humT, mix: mixNow, rest: material ? material.uniforms.uRest.value : 0, col: colNow.slice(), fps })
 };
 </script>
 </body>

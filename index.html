@@ -6,7 +6,7 @@
 <title>Caughley Universe</title>
 <script>
 // Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
-const BUILD = '22 Nov 9.27pm';
+const BUILD = '22 Nov 9.56pm';
 function checkVersion() {
   fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
     v = v.trim();
@@ -122,6 +122,7 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
     <div class="row latRow"><label for="hz">Tone</label><button class="step" id="hzDn">&minus;</button><input id="hz" type="range" min="40" max="1000" step="1" value="432"><button class="step" id="hzUp">+</button><span class="val" id="hzV"></span></div>
     <div class="row latRow"><label for="tvol">Tone volume</label><input id="tvol" type="range" min="0" max="100" step="1" value="0"><span class="val" id="tvolV"></span></div>
     <div class="row latRow"><label for="scape">Soundscape</label><select id="scape"></select></div>
+    <div class="row latRow"><span class="lab">My own track</span><div class="modes"><button id="ownBtn">Choose a file from this device</button></div><input type="file" id="ownFile" accept="audio/*,.mp3,.flac,.wav,.m4a,.ogg" style="display:none"></div>
     <div class="row latRow"><label for="wvol">Scape volume</label><input id="wvol" type="range" min="0" max="100" step="1" value="60"><span class="val" id="wvolV"></span></div>
   </div>
 
@@ -1055,15 +1056,16 @@ async function startLoop(key) {
     }
     if (cfg.scape !== key) return true;
     stopLoop();
-    const src = audioCtx.createBufferSource();
+    const src = audioCtx.createBufferSource(), padded = !!SCAPES[key][4];
     src.buffer = loopBufs[key]; src.loop = true;
-    src.loopStart = LOOP_PAD; src.loopEnd = LOOP_PAD + SCAPES[key][4] / 44100;
-    src.connect(scapeBus); src.start(0, LOOP_PAD);
+    if (padded) { src.loopStart = LOOP_PAD; src.loopEnd = LOOP_PAD + SCAPES[key][4] / 44100; }
+    src.connect(scapeBus); src.start(0, padded ? LOOP_PAD : 0);
     loopSrc = src;
     return true;
   } catch (err) { return false; }
 }
 function playWithPlayers(key) {
+  if (!SCAPES[key][1]) return;
   const now = audioCtx.currentTime;
   const url = 'sounds/' + SCAPES[key][1];
   players.forEach((p, i) => {
@@ -1078,6 +1080,33 @@ function playWithPlayers(key) {
   applyScapeVol();
 }
 let scapeMsg = '';
+// ---- My own track: an audio file chosen from this device. It is looped end to start, kept on this device
+// only (so it is there next visit), and never uploaded anywhere.
+const ownDB = () => new Promise((res, rej) => {
+  const rq = indexedDB.open('caughley-universe', 1);
+  rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
+  rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+});
+async function ownSave(name, data) {
+  try { const db = await ownDB(); await new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put({ name, data }, 'own'); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); } catch (err) {}
+}
+async function ownSaved() {
+  try { const db = await ownDB(); return await new Promise((res, rej) => { const rq = db.transaction('kv').objectStore('kv').get('own'); rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error); }); } catch (err) { return null; }
+}
+async function ownLoad(name, data) {
+  const buf = await audioCtx.decodeAudioData(data.slice(0));
+  // set its level so it sits about as loud as the built-in soundscapes
+  const ch = buf.getChannelData(0); let sum = 0, cnt = 0;
+  for (let i = 0; i < ch.length; i += 7) { sum += ch[i] * ch[i]; cnt++; }
+  const rms = Math.sqrt(sum / Math.max(1, cnt));
+  loopBufs.own = buf;
+  const label = 'My track: ' + (name.length > 28 ? name.slice(0, 26) + '...' : name);
+  SCAPES.own = [label, null, Math.max(0.2, Math.min(4, 0.056 / Math.max(rms, 1e-4))), 'own'];
+  let o = $('scape').querySelector('option[value="own"]');
+  if (!o) { o = document.createElement('option'); o.value = 'own'; $('scape').appendChild(o); }
+  o.textContent = label;
+}
+const ownOpen = v => { try { if (v === undefined) return localStorage.getItem('ownOpen') === '1'; localStorage.setItem('ownOpen', v ? '1' : '0'); } catch (err) {} return false; };
 const FADE_OUT = Float32Array.from({ length: 65 }, (_, i) => Math.cos(i / 64 * Math.PI / 2));
 const FADE_IN = Float32Array.from({ length: 65 }, (_, i) => Math.sin(i / 64 * Math.PI / 2));
 // near the end of the recording, start the other player from the top and fade across
@@ -1351,7 +1380,22 @@ $('sOff').addEventListener('click', () => setSound(false));
 $('eOn').addEventListener('click', () => setEcho(true));
 $('eOff').addEventListener('click', () => setEcho(false));
 Object.keys(SCAPES).forEach(k => { const o = document.createElement('option'); o.value = k; o.textContent = SCAPES[k][0]; $('scape').appendChild(o); });
-$('scape').addEventListener('change', () => { waterBySet = false; if ($('scape').value !== 'off') setSound(true); setScape($('scape').value); showPanel(); });
+$('scape').addEventListener('change', () => { waterBySet = false; if ($('scape').value !== 'off') setSound(true); setScape($('scape').value); ownOpen($('scape').value === 'own'); showPanel(); });
+$('ownBtn').addEventListener('click', () => $('ownFile').click());
+$('ownFile').addEventListener('change', async () => {
+  const f = $('ownFile').files[0];
+  if (!f) return;
+  setMsg = ' Loading ' + f.name + '...';
+  try {
+    const data = await f.arrayBuffer();
+    await ownLoad(f.name, data);
+    waterBySet = false; setSound(true); setScape('own'); ownOpen(true);
+    setMsg = ' Playing your track. It stays on this device and will be here next time.';
+    ownSave(f.name, data);
+  } catch (err) { setMsg = ' That file could not be played as audio.'; }
+  $('ownFile').value = '';
+  showPanel();
+});
 all('[data-reach]').forEach(b => b.addEventListener('click', () => setReach(Number(b.dataset.reach))));
 function setReach(v) {
   cfg.reach = v;
@@ -1538,8 +1582,11 @@ $('go').addEventListener('click', async () => {
   const mic = lat ? false : await startMic();
   if (audioCtx.state === 'suspended') { try { await audioCtx.resume(); } catch (err) {} }
   setMode(mic ? 'voice' : 'sim');
-  // the Universe opens with the binaural music playing, and the tone silent until you raise it
-  if (!lat) { setSound(true); setScape('velvet'); }
+  // a track you chose on an earlier visit is still here
+  let mine = false;
+  try { const sv = await ownSaved(); if (sv) { await ownLoad(sv.name, sv.data); mine = ownOpen(); } } catch (err) {}
+  // the Universe opens with music playing (your own track if that is what you last chose, otherwise the binaural piece), and the tone silent until you raise it
+  if (!lat) { setSound(true); setScape(mine ? 'own' : 'velvet'); }
   try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (err) {}
   $('start').style.display = 'none';
   panel.style.display = 'block';

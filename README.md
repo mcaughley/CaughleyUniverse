@@ -32,6 +32,7 @@ They appear to be space-agency composite images; source and credit lines are to 
 Credits known so far, from NASA's own pages:
 
 - pillars, cliffs, helix-knots: NASA, ESA, CSA, STScI
+- pillars-cloud: a softened, star-free copy of pillars, used to colour the nebula clouds
 - whirlpool: NASA, ESA, S. Beckwith (STScI), and the Hubble Heritage Team (STScI/AURA)
 - helix: NASA, NOAO, ESA, the Hubble Helix Nebula Team, M. Meixner (STScI), and T.A. Rector (NRAO)
 

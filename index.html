@@ -4,6 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Caughley Universe</title>
+<script>
+// Always the latest: ask the site which version is current (never from the phone's saved copy) and reload if this one is older.
+const BUILD = '22 Nov 7.36pm';
+function checkVersion() {
+  fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.text() : '').then(v => {
+    v = v.trim();
+    if (v && v !== BUILD && location.search.indexOf('v=' + encodeURIComponent(v)) < 0) location.replace(location.pathname + '?v=' + encodeURIComponent(v));
+  }).catch(() => {});
+}
+checkVersion();
+document.addEventListener('visibilitychange', () => { const s = document.getElementById('start'); if (!document.hidden && s && s.style.display !== 'none') checkVersion(); });
+</script>
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif;color:#9fd8ff;touch-action:none;-webkit-user-select:none;user-select:none}
 canvas{display:block}
@@ -68,6 +80,7 @@ select{flex:1;min-width:0;padding:8px 10px;border-radius:18px;border:1px solid #
   </div>
   <p id="intro2"></p>
   <button id="go" class="big">Enter</button>
+  <p id="ver" style="font-size:11px;opacity:.7"></p>
 </div>
 <div id="warn">
   <h1>40+40</h1>
@@ -1380,6 +1393,7 @@ function setRealm(r) {
 }
 all('[data-realm]').forEach(b => b.addEventListener('click', () => setRealm(b.dataset.realm)));
 setRealm('universe');
+$('ver').textContent = 'Version ' + BUILD;
 all('[data-dev]').forEach(b => b.addEventListener('click', () => setDevice(b.dataset.dev)));
 {
   const ua = navigator.userAgent || '';
